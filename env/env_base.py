@@ -3,6 +3,7 @@ from pettingzoo.utils import agent_selector
 from gym.spaces import Box, Discrete
 import numpy as np
 from pettingzoo.mpe import simple_adversary_v3
+from obstacle import obstacle
 
 # env = simple_adversary_v3.parallel_env(render_mode = "human",N= 2, max_cycles = NUM_STEP, continuous_actions = True)
 
