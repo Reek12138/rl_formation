@@ -1,4 +1,5 @@
 import math
+import numpy as np
 
 class obstacle():
     def __init__(self, radius, pos_x, pos_y, safe_theta) -> None:
@@ -22,3 +23,6 @@ class obstacle():
         theta = math.atan2(agent_y - self.pos_y, agent_x - self.pos_x)
 
         return dis,theta
+    
+    def position(self):
+        return np.array([self.pos_x, self.pos_y])
