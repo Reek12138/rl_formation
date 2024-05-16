@@ -4,14 +4,14 @@ from pettingzoo.utils import agent_selector
 from gym.spaces import Box, Discrete
 import numpy as np
 from pettingzoo.mpe import simple_adversary_v3
-from obstacle import obstacle
-from circle_agent import circle_agent
-import matplotlib as plt
+from .obstacle import obstacle
+from .circle_agent import circle_agent
+import matplotlib.pyplot as plt
 
 # env = simple_adversary_v3.parallel_env(render_mode = "human",N= 2, max_cycles = NUM_STEP, continuous_actions = True)
 
 
-class CustomEnv(ParallelEnv):
+class CustomEnv():
     metadata = {'render.modes': ['human']}
 
     def __init__(self, num_agents=3, width=200, height=200, num_obstacles=5, agent_radius=1, safe_theta = 2,
@@ -23,6 +23,9 @@ class CustomEnv(ParallelEnv):
         self.num_obstacles = num_obstacles
         self.obs_radius = 10
         self.agent_radius = agent_radius
+        self.fig = None
+        self.ax = None
+    
         
         # 生成circle_agent实例列表
         self.leader_agent = circle_agent(self.agent_radius, pos_x=5, pos_y=5)
@@ -146,7 +149,7 @@ class CustomEnv(ParallelEnv):
         return closest_obstacle_pos
         
 
-    def render(self, mode='human'):
+    def render(self, mode='human', display_time = 0.1):
         if self.fig is None or self.ax is None:
             self.fig, self.ax = plt.subplots()
             self.ax.set_xlim(0, self.width)
@@ -167,10 +170,12 @@ class CustomEnv(ParallelEnv):
             self.ax.plot(obs.pos_x, obs.pos_y, color='red', markersize=8)
 
         # 绘制目标
-        for target_pos in self.target_pos.values():
-            self.ax.plot(target_pos[0], target_pos[1], color='green', markersize=8)
+        # for target_pos in self.target_pos.values():
+            # self.ax.plot(target_pos[0], target_pos[1], color='green', markersize=8)
+        self.ax.plot(self.leader_target_pos[0], self.leader_target_pos[1], color='green', markersize=8)
 
-        plt.pause(0.01)  # 暂停以更新图形
+        plt.pause(display_time)  # 暂停以更新图形
+        plt.show()
 
     def render_close(self):
         if self.fig is not None:
