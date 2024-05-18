@@ -9,8 +9,6 @@ from .circle_agent import circle_agent
 import matplotlib.pyplot as plt
 from math import sin, cos, tan, pi, sqrt
 
-# env = simple_adversary_v3.parallel_env(render_mode = "human",N= 2, max_cycles = NUM_STEP, continuous_actions = True)
-
 
 class CustomEnv():
     metadata = {'render.modes': ['human']}
@@ -26,10 +24,10 @@ class CustomEnv():
         self.agent_radius = agent_radius
         self.fig = None
         self.ax = None
-        self.formation_pos = {"agent_0":[-1,-1],
-                              "agent_1":[-1,1],
-                              "agent_2":[1,-1],
-                              "agent_3":[1,1]}
+        self.formation_pos = {"agent_0":[-15,-15],
+                              "agent_1":[-15,15],
+                              "agent_2":[15,-15],
+                              "agent_3":[15,15]}
         self.display_time = delta
         self.safe_theta = safe_theta
 
@@ -55,7 +53,6 @@ class CustomEnv():
         self.leader_target_pos = target_pos#目标位置
         self.reset()
 
-    
     def _check_obs(self):
         """ 确保障碍物不重复"""
         obstacles_keys = list(self.obstacles.keys())
@@ -71,7 +68,7 @@ class CustomEnv():
                     dis = np.linalg.norm(obs.position() - self.obstacles[key].position())
 
 
-    def reset(self):#TODO
+    def reset(self):
         #    重置位置
         # self.leader_agent.set_position(5,5)
         # for i,agent in enumerate(self.follower_agents.values()) :
@@ -82,8 +79,8 @@ class CustomEnv():
         #     agent.set_position(self.leader_agent.pos_x + self.formation_pos[i][0]*15 + np.random.rand() * 5,
         #                         self.leader_agent.pos_y + self.formation_pos[i][1]*15 + np.random.rand() * 5)
         for agent_id, agent in self.follower_agents.items():
-            agent.set_position(self.leader_agent.pos_x + self.formation_pos[agent_id][0]*15 + np.random.rand()*5,
-                               self.leader_agent.pos_y + self.formation_pos[agent_id][1]*15 + np.random.rand()*5)
+            agent.set_position(self.leader_agent.pos_x + self.formation_pos[agent_id][0] + np.random.rand()*5,
+                               self.leader_agent.pos_y + self.formation_pos[agent_id][1] + np.random.rand()*5)
             
         # 重置observations TODO 
         self.observations = {}
@@ -117,13 +114,13 @@ class CustomEnv():
             agent.info = {}
             self.infos[agent_id] = agent.info
 
-    def step(self, leader_action, follower_actions):#TODO
+    def step(self, leader_action, follower_actions):
         """输入leader_action[线速度，角速度]
                         follower_actions = {"agent_0": action,
                                                                  "agent_1": action,
                                                                  "agent_2": action,
                                                                  "agent_3": action }"""
-        # agent = self._agent_selector.next()
+        
         self._apply_leader_action(self.leader_agent, leader_action)
 
         for agent_id,action in follower_actions.items():
@@ -137,23 +134,30 @@ class CustomEnv():
         dones = {}
         infos = {}
 
-        for agent_id ,agent in self.follower_agents.items():#TODO
-            target_x = self.leader_agent.pos_x + self.formation_pos[agent_id][0]*15
-            target_y = self.leader_agent.pos_y + self.formation_pos[agent_id][1]*15
+        observations["leader_agent"] = self.observe_leader(self.leader_agent, self.leader_target_pos)
+        rewards["leader_agent"] = self._calculate_reward(agent_id="leader_agent", agent=self.leader_agent, formation_target=self.leader_target_pos)
+        dones["leader_agent"] = self.leader_agent.done
+        infos["leader_agent"] = self.leader_agent.info
+
+        for agent_id ,agent in self.follower_agents.items():
+            target_x = self.leader_agent.pos_x + self.formation_pos[agent_id][0]
+            target_y = self.leader_agent.pos_y + self.formation_pos[agent_id][1]
             formation_target = [target_x, target_y]
 
             observations[agent_id] = self.observe(agent_id, agent, formation_target)
-            rewards[agent_id] = self._calculate_reward(agent_id, agent)
-            # dones[agent_id] = self._is_done(agent_id, agent)
-            dones[agent_id] = {}
-            infos[agent_id] = {}
+            rewards[agent_id] = self._calculate_reward(agent_id, agent, formation_target)
+            dones[agent_id] = agent.done
+            infos[agent_id] = agent.info
 
         return observations, rewards, dones, infos
     
     def _apply_leader_action(self, agent, action):
-        """假设输入的动作是[线速度,角速度]"""
-        dx = action[0] * self.display_time * cos(agent.orientation + action[1])
-        dy = action[0] * self.display_time * sin(agent.orientation + action[1])
+        """假设输入的动作是[线速度m/s,角速度 弧度]"""
+        new_orientation = agent.orientation + action[1]*self.display_time
+        new_orientation % (2*np.pi)
+        agent.orientation = new_orientation
+        dx = action[0] * self.display_time * cos(new_orientation)
+        dy = action[0] * self.display_time * sin(new_orientation)
         x = agent.pos_x + dx
         y = agent.pos_y + dy
         new_pos = [x,y]
@@ -192,6 +196,21 @@ class CustomEnv():
                 if dis < 2 * self.agent_radius + self.safe_theta:
                     check_agent.done = True
 
+    def observe_leader(self, agent, target):
+        """领航者自身位置，领航者与目标的距离和角度，与最近障碍物之间的距离（还有啥要加的？TODO）"""
+        self_pos = [agent.pos_x, agent.pos_y]
+        target_dis, target_angle = self.calculate_relative_distance_and_angle(self_pos, target)
+        
+        obs_distance_angle = []
+
+        for obs_id, obs in self.obstacles.items():
+            obs_pos = [obs.pos_x, obs.pos_y]
+            obs_distance, obs_angle = self.calculate_relative_distance_and_angle(self_pos, obs_pos)
+            obs_distance_angle.extend([obs_distance, obs_angle])
+        
+        observation = np.array(self_pos + [target_dis, target_angle] + obs_distance_angle)
+
+        return observation
 
     def observe(self, agent_id, agent, target):
         """
@@ -237,7 +256,7 @@ class CustomEnv():
 
     def render(self, mode='human', display_time = 0.1):
         if self.fig is None or self.ax is None:
-            self.fig, self.ax = plt.subplots()
+            self.fig, self.ax = plt.subplots(figsize=(10,10), dpi=100)
             self.ax.set_xlim(0, self.width)
             self.ax.set_ylim(0, self.height)
             self.ax.set_aspect('equal')
@@ -256,11 +275,9 @@ class CustomEnv():
             self.ax.plot(obs.pos_x, obs.pos_y, 'o', color='red', markersize=self.obs_radius)
 
         # 绘制目标
-        # for target_pos in self.target_pos.values():
-            # self.ax.plot(target_pos[0], target_pos[1], color='green', markersize=8)
         self.ax.plot(self.leader_target_pos[0], self.leader_target_pos[1], 'o', color='green', markersize=8)
 
-        plt.pause(display_time)  # 暂停以更新图形
+        plt.pause(self.display_time)  # 暂停以更新图形
         # plt.show()
 
     def render_close(self):
@@ -278,11 +295,9 @@ class CustomEnv():
             distance2target = np.linalg.norm(self.agent_pos[agent] - self.target_pos[agent])
             return distance2target < self.agent_pos + 2
 
-    def _calculate_reward(self, agent_id, agent):
+    def _calculate_reward(self, agent_id, agent, formation_target):
         # Calculate the reward for the agent
         pass
-
-
 
     @staticmethod
     def calculate_relative_distance_and_angle(pos1, pos2):
