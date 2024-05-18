@@ -31,7 +31,7 @@ class CustomEnv():
                               "agent_3":[15,15]}
         self.display_time = delta
         self.safe_theta = safe_theta
-        self.rvo_inter = rvo_inter
+        self.rvo_inter = rvo_inter()
 
         # 生成circle_agent实例列表
         self.leader_agent = circle_agent(self.agent_radius, pos_x=50, pos_y=50)
@@ -77,6 +77,8 @@ class CustomEnv():
         #     agent.set_position(self.leader_agent.pos_x + i*3 +3, self.leader_agent.pos_y + i*3 +3)
         
         self.leader_agent.set_position(25,25)
+        self.leader_agent.set_xy_vel(0,0)
+        self.leader_agent.set_linear_orientation(0,0)
         self.leader_agent.orientation = 0
         # for i,agent in enumerate(self.follower_agents.values()):
         #     agent.set_position(self.leader_agent.pos_x + self.formation_pos[i][0]*15 + np.random.rand() * 5,
@@ -84,6 +86,9 @@ class CustomEnv():
         for agent_id, agent in self.follower_agents.items():
             agent.set_position(self.leader_agent.pos_x + self.formation_pos[agent_id][0] + np.random.rand()*5,
                                self.leader_agent.pos_y + self.formation_pos[agent_id][1] + np.random.rand()*5)
+            agent.set_xy_vel(0,0)
+            agent.set_linear_orientation(0,0)
+            agent.orientation = 0
             
         # 重置observations TODO 
         self.observations = {}
@@ -138,7 +143,7 @@ class CustomEnv():
         infos = {}
 
         observations["leader_agent"] = self.observe_leader(self.leader_agent, self.leader_target_pos)
-        rewards["leader_agent"] = self._calculate_reward(agent_id="leader_agent", agent=self.leader_agent, formation_target=self.leader_target_pos)
+        rewards["leader_agent"] = self._calculate_leader_reward(agent_id="leader_agent", agent=self.leader_agent, formation_target=self.leader_target_pos, action = leader_action)
         dones["leader_agent"] = self.leader_agent.done
         infos["leader_agent"] = self.leader_agent.info
 
@@ -148,7 +153,7 @@ class CustomEnv():
             formation_target = [target_x, target_y]
 
             observations[agent_id] = self.observe(agent_id, agent, formation_target)
-            rewards[agent_id] = self._calculate_reward(agent_id, agent, formation_target)
+            rewards[agent_id] = self._calculate_follower_reward(agent_id, agent, formation_target, follower_actions[agent_id])
             dones[agent_id] = agent.done
             infos[agent_id] = agent.info
 
@@ -158,7 +163,7 @@ class CustomEnv():
         """假设输入的动作是[线速度m/s,角速度 弧度]"""
         new_orientation = agent.orientation + action[1]*self.display_time
         new_orientation % (2*np.pi)
-        agent.orientation = new_orientation
+
         dx = action[0] * self.display_time * cos(new_orientation)
         dy = action[0] * self.display_time * sin(new_orientation)
         x = agent.pos_x + dx
@@ -166,6 +171,8 @@ class CustomEnv():
         new_pos = [x,y]
         if not self._check_obs_collision(agent, new_pos):
             agent.set_position(x, y)  
+            agent.set_linear_orientation(action[0], action[1])
+            agent.orientation = new_orientation
         else:
             agent.done = True
 
@@ -178,6 +185,7 @@ class CustomEnv():
         new_pos = [x,y]
         if not self._check_obs_collision(agent, new_pos):
             agent.set_position(x, y)  
+            agent.set_xy_vel(action[0], action[1])
         else:
             agent.done = True
 
@@ -298,9 +306,33 @@ class CustomEnv():
             distance2target = np.linalg.norm(self.agent_pos[agent] - self.target_pos[agent])
             return distance2target < self.agent_pos + 2
 
-    def _calculate_reward(self, agent_id, agent, formation_target):#TODO
-        # Calculate the reward for the agent
+    def _calculate_leader_reward(self, agent_id, agent, formation_target, action ):
+        
         pass
+
+    def _calculate_follower_reward(self, check_agent_id, check_agent, formation_target, agent_action):#TODO
+        # Calculate the reward for the agent
+        robot_state = [check_agent.pos_x, check_agent.pos_y, check_agent.xy_vel[0], check_agent.xy_vel[1], self.agent_radius]
+        nei_state_list = []
+        for agent_id, agent in self.follower_agents.items():
+            if agent_id != check_agent_id:
+                other_robot_state = [agent.pos_x, agent.pos_y, agent.xy_vel[0], agent.xy_vel[1], self.agent_radius]
+                nei_state_list.append(other_robot_state)
+
+        obs_cir_list = []
+        for obs in self.obstacles.values():
+            obs_state = [obs.pos_x, obs.pos_y, obs.xy_vel[0], obs.xy_vel[1], self.obs_radius]
+            obs_cir_list.append(obs_state)
+
+        obs_line_list = []
+        action = agent_action
+        vo_flag, min_exp_time, min_dis = self.rvo_inter.config_vo_reward(robot_state=robot_state,
+                                                                                                                                        nei_state_list=nei_state_list,
+                                                                                                                                        obs_cir_list=obs_cir_list,
+                                                                                                                                        obs_line_list=obs_line_list,
+                                                                                                                                        action=action)
+        reward = min_dis
+        return reward
 
     @staticmethod
     def calculate_relative_distance_and_angle(pos1, pos2):

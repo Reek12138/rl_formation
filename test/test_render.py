@@ -16,10 +16,10 @@ env.render(display_time=1)
 # env.render_close()
 for i in range(100):
     observations, rewards, dones, infos = env.step(leader_action=[10,(30/180)*np.pi], follower_actions={
-                                                                                                                                                "agent_0":[10,0],
-                                                                                                                                                "agent_1":[10,0],
-                                                                                                                                                "agent_2":[10,0],
-                                                                                                                                                "agent_3":[10,0]
+                                                                                                                                                "agent_0":[10,10],
+                                                                                                                                                "agent_1":[10,20],
+                                                                                                                                                "agent_2":[10,5],
+                                                                                                                                                "agent_3":[10,10]
     })
     # 每10轮打印一次结果
     if (i + 1) % 10 == 0:
@@ -28,6 +28,6 @@ for i in range(100):
         print(f"Round {i+1}: Rewards: {rewards}")
         print(f"Round {i+1}: Dones: {dones}")
         print(f"Round {i+1}: Infos: {infos}")
-        env.reset()
+        # env.reset()
     env.render(display_time=0.1)
 env.render_close()

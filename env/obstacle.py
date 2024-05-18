@@ -7,6 +7,7 @@ class obstacle():
         self.pos_x = pos_x
         self.pos_y = pos_y
         self.safe_theta = safe_theta
+        self.xy_vel = [0,0]
 
     def is_collision(self, agent_x, agent_y, agent_radius):
         dis = math.sqrt((agent_x - self.pos_x)**2 + (agent_y - self.pos_y)**2)

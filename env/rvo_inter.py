@@ -13,6 +13,22 @@ class rvo_inter(reciprocal_vel_obs):
         self.ctime_line_threshold = ctime_line_threshold
 
     def config_vo_inf(self, robot_state, nei_state_list, obs_cir_list, obs_line_list, action=np.zeros((2,)), **kwargs):
+        """
+        输入:
+        robot_state: 机器人当前的状态。
+        nei_state_list: other agent的状态列表。
+        obs_cir_list: 圆形障碍物的列表。
+        obs_line_list: 线形障碍物的列表。
+        action: 机器人当前的动作，通常是一个包含速度向量的数组。
+        **kwargs: 接收可变数量的关键字参数，用于传递额外配置或环境参数。  
+
+        输出
+        obs_vo_list_nm: 处理和排序后的速度障碍列表，包含最重要的障碍信息。   
+        改为obs_vo_list    
+        vo_flag: 布尔值，表示是否存在有效的速度障碍。
+        min_exp_time: 最短的预期碰撞时间，用于评估当前动作的安全性。
+        collision_flag: 布尔值，表示是否已经发生或即将发生碰撞。
+        """
         # mode: vo, rvo, hrvo
         # robot_state, ns_list, oc_list, ol_list = self.preprocess(robot_state, nei_state_list, obs_cir_list, obs_line_list)
 
@@ -38,7 +54,7 @@ class rvo_inter(reciprocal_vel_obs):
             
             if vo_inf[3] is True: collision_flag = True
 
-        obs_vo_list.sort(reverse=True, key=lambda x: (-x[-1], x[-2]))
+        # obs_vo_list.sort(reverse=True, key=lambda x: (-x[-1], x[-2])) #排序用，这里先不用
 
         if len(obs_vo_list) > self.nm:
             obs_vo_list_nm = obs_vo_list[-self.nm:]
@@ -48,10 +64,23 @@ class rvo_inter(reciprocal_vel_obs):
         if self.nm == 0:
             obs_vo_list_nm = []
 
-        return obs_vo_list_nm, vo_flag, min_exp_time, collision_flag
+        return obs_vo_list, vo_flag, min_exp_time, collision_flag
         
     def config_vo_reward(self, robot_state, nei_state_list, obs_cir_list, obs_line_list, action=np.zeros((2,)), **kwargs):
-
+        """
+        输入
+        robot_state: 机器人当前的状态，通常包括位置、速度等。
+        nei_state_list: 周围邻居（其他机器人或移动对象）的状态列表。
+        obs_cir_list: 圆形障碍物的列表。
+        obs_line_list: 线形障碍物的列表。
+        action: 机器人当前的动作，通常是一个包含速度向量的数组。
+        **kwargs: 接收可变数量的关键字参数，用于传递额外配置或环境参数。
+          
+        输出:
+        vo_flag: 布尔值，表示是否存在有效的速度障碍，即当前的速度是否可能导致碰撞。
+        min_exp_time: 最短的预期碰撞时间，用于评估当前动作的安全性。
+        min_dis: 与障碍物的最近距离，这是一个关键的安全指标。
+        """
         # robot_state, ns_list, oc_list, ol_list = self.preprocess(robot_state, nei_state_list, obs_cir_list, obs_line_list)
 
         vo_list1 = list(map(lambda x: self.config_vo_circle2(robot_state, x, action, 'rvo', **kwargs), nei_state_list))
@@ -85,12 +114,13 @@ class rvo_inter(reciprocal_vel_obs):
 
     def config_vo_circle2(self, state, circular, action, mode='rvo', **kwargs):
         """
-        返回一个列表 [observation_vo, vo_flag, exp_time, collision_flag, min_dis]：
-        observation_vo：包含了速度障碍的速度、边界角度（用余弦和正弦值表示）、最近距离和转化后的预期碰撞时间。
-        vo_flag：bool，指示是否存在速度障碍，即当前的速度是否可能导致碰撞。
-        exp_time：预期碰撞时间。
-        collision_flag：bool，指示是否已经处于碰撞状态。
-        min_dis：机器人与障碍物之间的最小距离。
+        action:[vx, vy]
+        返回一个列表 [observation_vo, vo_flag, exp_time, collision_flag, min_dis]：   
+        observation_vo：包含了速度障碍的速度、边界角度（用余弦和正弦值表示）、最近距离和转化后的预期碰撞时间。   
+        vo_flag：bool，指示是否存在速度障碍，即当前的速度是否可能导致碰撞。   
+        exp_time：预期碰撞时间。   
+        collision_flag：bool，指示是否已经处于碰撞状态。   
+        min_dis：机器人与障碍物之间的最小距离。   
         """
         
         x, y, vx, vy, r = state[0:5]
