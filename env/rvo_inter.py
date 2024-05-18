@@ -1,4 +1,4 @@
-from reciprocal_vel_obs import reciprocal_vel_obs
+from .reciprocal_vel_obs import reciprocal_vel_obs
 from math import sqrt, atan2, asin, sin, pi, cos, inf
 import numpy as np
 

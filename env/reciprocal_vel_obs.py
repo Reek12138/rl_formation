@@ -16,17 +16,18 @@ class reciprocal_vel_obs:
         self.nr = neighbor_region
 
     def cal_vel(self, robot_state, nei_state_list=[], obs_cir_list=[], obs_line_list=[], mode = 'rvo'):
-        
-        robot_state, ns_list, oc_list, ol_list = self.preprocess(robot_state, nei_state_list, obs_cir_list, obs_line_list)
+        """输入的是list"""
+        # robot_state, ns_list, oc_list, ol_list = self.preprocess(robot_state, nei_state_list, obs_cir_list, obs_line_list)
 
         # configure the vo or rvo or hrvo
-        vo_list = self.config_vo(robot_state, ns_list, oc_list, ol_list, mode)
-        vo_outside, vo_inside = self.vel_candidate(robot_state, vo_list)
-        rvo_vel = self.vel_select(robot_state, vo_outside, vo_inside, ns_list, oc_list, ol_list, vo_list)
+        vo_list = self.config_vo(robot_state, nei_state_list, obs_cir_list, obs_line_list, mode)#配置速度障碍
+        vo_outside, vo_inside = self.vel_candidate(robot_state, vo_list)#生成候选速度集合
+        rvo_vel = self.vel_select(robot_state, vo_outside, vo_inside, nei_state_list, obs_cir_list, obs_line_list, vo_list)#从候选集中选择最优速度
 
         return rvo_vel
 
     def preprocess(self, robot_state, nei_state_list, obs_cir_list, obs_line_list):
+        """处理输入数据，过滤出邻近的对象和障碍物 暂时不用"""
         # components in the region 
         robot_state = np.squeeze(robot_state)
         ns_list = list(filter(lambda x: 0 < reciprocal_vel_obs.distance(robot_state, x) <= self.nr, nei_state_list))
@@ -37,6 +38,16 @@ class reciprocal_vel_obs:
         return robot_state, ns_list, oc_list, ol_list
 
     def config_vo(self, robot_state, nei_state_list, obs_cir_list, obs_line_list, mode):
+        """
+        根据不同的模式（VO, RVO, HRVO）来计算和配置速度障碍
+        输入robot_state   [x, y, vx, vy, r]
+        nei_state_list    【 [x, y, vx, vy, r] 】
+        obs_cir_list    【 [x, y, vx, vy, r] 】
+        obs_line_list   不用
+        mode  'vo','rvo','hrvo'
+
+        return   vo_list
+        """
         # mode: vo, rvo, hrvo
         vo_list1 = list(map(lambda x: self.config_vo_circle(robot_state, x, mode), nei_state_list))
         vo_list2 = list(map(lambda y: self.config_vo_circle(robot_state, y, 'vo'), obs_cir_list))
@@ -45,6 +56,9 @@ class reciprocal_vel_obs:
         return vo_list1 + vo_list2 + vo_list3
 
     def config_vo_circle(self, state, circular, mode='vo'):
+        """
+        return [apex[vx, vy] , theta_left, theta_right]
+        """
         
         x, y, vx, vy, r = state[0:5]
         mx, my, mvx, mvy, mr = circular[0:5]
@@ -119,6 +133,13 @@ class reciprocal_vel_obs:
         return  apex+[line_left_ori, line_right_ori]  
 
     def vel_candidate(self, robot_state, vo_list):
+        """
+        生成机器人的潜在速度候选集，并区分这些速度向量是位于速度障碍(VO)之外还是之内
+        INPUT: robot_state  [x, y, vx, vy, r]
+                        vo_list  【 [[vx, vy], theta_left, theta_right] , 
+                                          [[vx, vy], theta_left, theta_right] 】
+        OUTPUT: outside, inside【[new_vx, new_vy], [new_vx, new_vy]......】
+        """
         
         vo_outside, vo_inside = [], []
         
@@ -149,6 +170,7 @@ class reciprocal_vel_obs:
         return True
     
     def vo_out2(self, vx, vy, vo_list):
+        """检查给定的速度向量 (vx, vy) 是否在由 vo_list 中的每个速度障碍（RVO）定义的安全区域之外"""
     
         for rvo in vo_list:
             line_left_vector = [cos(rvo[2]), sin(rvo[2])]
@@ -171,6 +193,7 @@ class reciprocal_vel_obs:
             return temp
             
     def penalty(self, vel, vel_des, robot_state, nei_state_list, obs_cir_list, obs_line_list, factor):
+        """动态环境中为机器人或车辆选择最优速度"""
         
         tc_list = []
 

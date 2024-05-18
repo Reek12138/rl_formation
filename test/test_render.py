@@ -28,5 +28,6 @@ for i in range(100):
         print(f"Round {i+1}: Rewards: {rewards}")
         print(f"Round {i+1}: Dones: {dones}")
         print(f"Round {i+1}: Infos: {infos}")
+        env.reset()
     env.render(display_time=0.1)
 env.render_close()

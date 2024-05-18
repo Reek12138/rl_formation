@@ -8,6 +8,7 @@ from .obstacle import obstacle
 from .circle_agent import circle_agent
 import matplotlib.pyplot as plt
 from math import sin, cos, tan, pi, sqrt
+from .rvo_inter import rvo_inter
 
 
 class CustomEnv():
@@ -30,6 +31,7 @@ class CustomEnv():
                               "agent_3":[15,15]}
         self.display_time = delta
         self.safe_theta = safe_theta
+        self.rvo_inter = rvo_inter
 
         # 生成circle_agent实例列表
         self.leader_agent = circle_agent(self.agent_radius, pos_x=50, pos_y=50)
@@ -75,6 +77,7 @@ class CustomEnv():
         #     agent.set_position(self.leader_agent.pos_x + i*3 +3, self.leader_agent.pos_y + i*3 +3)
         
         self.leader_agent.set_position(25,25)
+        self.leader_agent.orientation = 0
         # for i,agent in enumerate(self.follower_agents.values()):
         #     agent.set_position(self.leader_agent.pos_x + self.formation_pos[i][0]*15 + np.random.rand() * 5,
         #                         self.leader_agent.pos_y + self.formation_pos[i][1]*15 + np.random.rand() * 5)
@@ -85,7 +88,7 @@ class CustomEnv():
         # 重置observations TODO 
         self.observations = {}
         self.leader_agent.observation = {}#自己的位置、到目标点的距离、到目标点的角度、和所有障碍物的距离、和所有障碍物的角度
-        self.observations['leader_agent'] = self.leader_agent.observation
+        self.observations["leader_agent"] = self.leader_agent.observation
         for agent_id, agent in self.follower_agents.items():
             agent.observation = {}  
             self.observations[agent_id] = agent.observation
@@ -199,13 +202,13 @@ class CustomEnv():
     def observe_leader(self, agent, target):
         """领航者自身位置，领航者与目标的距离和角度，与最近障碍物之间的距离（还有啥要加的？TODO）"""
         self_pos = [agent.pos_x, agent.pos_y]
-        target_dis, target_angle = self.calculate_relative_distance_and_angle(self_pos, target)
+        target_dis, target_angle = CustomEnv.calculate_relative_distance_and_angle(self_pos, target)
         
         obs_distance_angle = []
 
         for obs_id, obs in self.obstacles.items():
             obs_pos = [obs.pos_x, obs.pos_y]
-            obs_distance, obs_angle = self.calculate_relative_distance_and_angle(self_pos, obs_pos)
+            obs_distance, obs_angle = CustomEnv.calculate_relative_distance_and_angle(self_pos, obs_pos)
             obs_distance_angle.extend([obs_distance, obs_angle])
         
         observation = np.array(self_pos + [target_dis, target_angle] + obs_distance_angle)
@@ -218,14 +221,14 @@ class CustomEnv():
         observation =[self_pos_x, self_pos_y, targetpos_x, targetpos_y, obs1_dis, obs1_ang,....... agent1_dis,agent1_ang....]
         """
         self_pos = [agent.pos_x, agent.pos_y]
-        target_dis, target_angle = self.calculate_relative_distance_and_angle(self_pos, target)
+        target_dis, target_angle = CustomEnv.calculate_relative_distance_and_angle(self_pos, target)
 
         other_agents_distance_angle = []
 
         for follower_agent_id, follower_agent in self.follower_agents.items():
             if follower_agent_id != agent_id:
                 other_pos = [follower_agent.pos_x, follower_agent.pos_y]
-                distance, angle = self.calculate_relative_distance_and_angle(self_pos, other_pos)
+                distance, angle = CustomEnv.calculate_relative_distance_and_angle(self_pos, other_pos)
                 other_agents_distance_angle.extend([distance, angle])
         
         # closest_obs_pos = self._find_closest_obstacle(self_pos)
@@ -234,7 +237,7 @@ class CustomEnv():
 
         for obs_id, obs in self.obstacles.items():
             obs_pos = [obs.pos_x, obs.pos_y]
-            obs_distance, obs_angle = self.calculate_relative_distance_and_angle(self_pos, obs_pos)
+            obs_distance, obs_angle = CustomEnv.calculate_relative_distance_and_angle(self_pos, obs_pos)
             obs_distance_angle.extend([obs_distance, obs_angle])
 
         # observation = np.array([target_dis, target_angle, obs_distance, obs_angle] + other_agents_distance_angle)
@@ -295,7 +298,7 @@ class CustomEnv():
             distance2target = np.linalg.norm(self.agent_pos[agent] - self.target_pos[agent])
             return distance2target < self.agent_pos + 2
 
-    def _calculate_reward(self, agent_id, agent, formation_target):
+    def _calculate_reward(self, agent_id, agent, formation_target):#TODO
         # Calculate the reward for the agent
         pass
 
