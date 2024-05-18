@@ -14,13 +14,13 @@ class rvo_inter(reciprocal_vel_obs):
 
     def config_vo_inf(self, robot_state, nei_state_list, obs_cir_list, obs_line_list, action=np.zeros((2,)), **kwargs):
         # mode: vo, rvo, hrvo
-        robot_state, ns_list, oc_list, ol_list = self.preprocess(robot_state, nei_state_list, obs_cir_list, obs_line_list)
+        # robot_state, ns_list, oc_list, ol_list = self.preprocess(robot_state, nei_state_list, obs_cir_list, obs_line_list)
 
         action = np.squeeze(action)
 
-        vo_list1 = list(map(lambda x: self.config_vo_circle2(robot_state, x, action, 'rvo', **kwargs), ns_list))
-        vo_list2 = list(map(lambda y: self.config_vo_circle2(robot_state, y,action, 'vo', **kwargs), oc_list))
-        vo_list3 = list(map(lambda z: self.config_vo_line2(robot_state, z, action, **kwargs), ol_list))
+        vo_list1 = list(map(lambda x: self.config_vo_circle2(robot_state, x, action, 'rvo', **kwargs), nei_state_list))
+        vo_list2 = list(map(lambda y: self.config_vo_circle2(robot_state, y,action, 'vo', **kwargs), obs_cir_list))
+        vo_list3 = list(map(lambda z: self.config_vo_line2(robot_state, z, action, **kwargs), obs_line_list))
 
         obs_vo_list = []
 
@@ -52,11 +52,11 @@ class rvo_inter(reciprocal_vel_obs):
         
     def config_vo_reward(self, robot_state, nei_state_list, obs_cir_list, obs_line_list, action=np.zeros((2,)), **kwargs):
 
-        robot_state, ns_list, oc_list, ol_list = self.preprocess(robot_state, nei_state_list, obs_cir_list, obs_line_list)
+        # robot_state, ns_list, oc_list, ol_list = self.preprocess(robot_state, nei_state_list, obs_cir_list, obs_line_list)
 
-        vo_list1 = list(map(lambda x: self.config_vo_circle2(robot_state, x, action, 'rvo', **kwargs), ns_list))
-        vo_list2 = list(map(lambda y: self.config_vo_circle2(robot_state, y,action, 'vo', **kwargs), oc_list))
-        vo_list3 = list(map(lambda z: self.config_vo_line2(robot_state, z, action, **kwargs), ol_list))
+        vo_list1 = list(map(lambda x: self.config_vo_circle2(robot_state, x, action, 'rvo', **kwargs), nei_state_list))
+        vo_list2 = list(map(lambda y: self.config_vo_circle2(robot_state, y, action, 'vo', **kwargs), obs_cir_list))
+        vo_list3 = list(map(lambda z: self.config_vo_line2(robot_state, z, action, **kwargs), obs_line_list))
 
         vo_flag = False
         min_exp_time = inf
@@ -84,6 +84,14 @@ class rvo_inter(reciprocal_vel_obs):
         return vo_list
 
     def config_vo_circle2(self, state, circular, action, mode='rvo', **kwargs):
+        """
+        返回一个列表 [observation_vo, vo_flag, exp_time, collision_flag, min_dis]：
+        observation_vo：包含了速度障碍的速度、边界角度（用余弦和正弦值表示）、最近距离和转化后的预期碰撞时间。
+        vo_flag：bool，指示是否存在速度障碍，即当前的速度是否可能导致碰撞。
+        exp_time：预期碰撞时间。
+        collision_flag：bool，指示是否已经处于碰撞状态。
+        min_dis：机器人与障碍物之间的最小距离。
+        """
         
         x, y, vx, vy, r = state[0:5]
         mx, my, mvx, mvy, mr = circular[0:5]
