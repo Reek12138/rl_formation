@@ -34,17 +34,19 @@ class CustomEnv:
         self.rvo_inter = rvo_inter()
 
         # 生成circle_agent实例列表
-        self.leader_agent = circle_agent(self.agent_radius, pos_x=50, pos_y=50)
+        self.leader_agent = circle_agent(self.agent_radius, pos_x=50, pos_y=50, n_agent=1, 
+                                         obs_dim=4+2*self.num_obstacles,
+                                         state_dim=4+2*self.num_obstacles)
 
-        self.follower_state_dim = 2 + 2 + 2*self.num_agents + 2*self.num_obstacles
+        self.follower_state_dim = 2 + 2 + 2*(self.num_agents-1) + 2*self.num_obstacles
         self.follower_agents = {
             f"agent_{i}": circle_agent(
                 radius=agent_radius,
                 pos_x=self.leader_agent.pos_x + i*20 +np.random.rand() * 10,
                 pos_y=self.leader_agent.pos_y + i*20 +np.random.rand() * 10,
-                memo_size=1000,
-                obs_dim=self.follower_state_dim * (self.num_agents + 1),
-                state_dim=self.follower_state_dim,
+                memo_size=10000,
+                obs_dim=self.follower_state_dim ,
+                state_dim=self.follower_state_dim* (self.num_agents ),
                 action_dim=2
                 ) 
                 for i in range(self.num_agents)}
@@ -143,6 +145,8 @@ class CustomEnv:
             formation_target = [target_x, target_y]
 
             observations[agent_id] = self.observe(agent_id, agent, formation_target)
+            
+            # print(agent_id,observations[agent_id])
             # rewards[agent_id] = self._calculate_follower_reward(agent_id, agent, formation_target, follower_actions[agent_id])
             dones[agent_id] = agent.done
             infos[agent_id] = agent.info

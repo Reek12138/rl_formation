@@ -1,6 +1,6 @@
 import gym
 # import test_env
-from pettingzoo.mpe import simple_adversary_v3
+# from pettingzoo.mpe import simple_adversary_v3
 import numpy as np
 import torch
 import torch.nn as nn
@@ -19,8 +19,9 @@ print(f"using device:{device}")
 
 def multi_obs_to_state(multi_obs):
     state = np.array([])
-    for agent_obs in multi_obs.values():
-        state = np.concatenate([state, agent_obs])
+    for agent_id, agent_obs in multi_obs.items():
+        if agent_id != "leader_agent":
+            state = np.concatenate([state, agent_obs])
     return state
 
 NUM_EPISODE = 10000
@@ -37,6 +38,8 @@ TAU = 0.01
 #1. initialize the agent
 # env = simple_adversary_v3.parallel_env(N= 2, max_cycles = NUM_STEP, continuous_actions = True)
 env = CustomEnv(delta=0.1)
+# print("reset1==========================")
+
 multi_obs, infos = env.reset()
 #这里要根据环境修改
 NUM_AGENT = env.num_agents
@@ -70,10 +73,17 @@ for agent in env.follower_agents.values():
 
 # 2. main training loop
 for episode_i in range(NUM_EPISODE):
+    # print("reset2==========================")
+    print("episode",episode_i,"========================")
+
     multi_obs, infos = env.reset()
+
     episode_reward = 0
     multi_done = {agent_name: False for agent_name in agent_name_list}
+
     for step_i in range(NUM_STEP):
+        print("episode",episode_i,"step",step_i)
+
         total_step = episode_i*NUM_STEP + step_i
 
         #2.1 collect actions from all agents 
@@ -107,12 +117,14 @@ for episode_i in range(NUM_EPISODE):
                                                 multi_rewards["leader_agent"],
                                                 multi_done["leader_agent"]
                                                 )
+        # print("add_leader_memo")
         for agent_id, agent in env.follower_agents.items():
             single_obs = multi_obs[agent_id]
             single_next_obs = multi_next_obs[agent_id]
             single_action = multi_actions[agent_id]
             single_reward = multi_rewards[agent_id]
             single_done = multi_done[agent_id]
+            # print(agent_id, single_obs)
             agent.replay_buffer.add_memo(single_obs, 
                                         single_next_obs,
                                         follower_state, 
@@ -141,9 +153,7 @@ for episode_i in range(NUM_EPISODE):
         else:
             batch_idx = np.random.choice(current_memo_size,  BATCH_SIZE)        
 
-        for agent_i in range(NUM_AGENT):
-            agent = agents[agent_i]
-
+        for agend_id, agent in env.follower_agents.items():
             batch_obses, batch_next_obses, batch_states, batch_next_state, batch_actions, batch_rewards, batch_dones  = agent.replay_buffer.sample(batch_idx)
             # single+batch 
             batch_obses_tensor = torch.tensor(batch_obses, dtype = torch.float).to(device)
@@ -172,14 +182,18 @@ for episode_i in range(NUM_EPISODE):
             multi_batch_rewards.append(batch_rewards_tensor)
             multi_batch_dones.append(batch_dones_tensor)
 
+        # 采样的action
         multi_batch_actions_tensor = torch.cat(multi_batch_actions, dim =1).to(device)
+        # 采样的next_action
         multi_batch_next_actions_tensor = torch.cat(multi_batch_next_actions, dim =1).to(device)
+        # 采样的state经过网络对应的action
         multi_batch_online_actions_tensor = torch.cat(multi_batch_online_actions, dim =1).to(device)
 
         # update critic and actor 
         if(total_step +1)% TARGET_UPDATE_INTERVAL == 0:
-            for agent_i in range(NUM_AGENT):
-                agent = agents[agent_i]
+            # for agent_i in range(NUM_AGENT):
+            for agent_i, agent in enumerate(env.follower_agents.values()):
+                # agent = agents[agent_i]
 
                 batch_obses_tensor = multi_batch_obses[agent_i]
                 batch_states_tensor = multi_batch_states[agent_i]
@@ -223,19 +237,23 @@ for episode_i in range(NUM_EPISODE):
         # print(f"episode_reward:{episode_reward}")
         
     # 3. render the env
-    if (episode_i + 1) % 200 == 0:
-        env = simple_adversary_v3.parallel_env(N=2, max_cycles=NUM_STEP, continuous_actions=True,
-                                               render_mode="human")
+    if (episode_i + 1) % 10 == 0:
+        env = CustomEnv()
         for test_epi_i in range(10):
             multi_obs, infos = env.reset()
+            print("render==========================")
             for step_i in range(NUM_STEP):
+                env.render(display_time=0.1)
+
                 multi_actions = {}
                 for agent_i, agent_name in enumerate(agent_name_list):
                     agent = agents[agent_i]
                     single_obs = multi_obs[agent_name]
                     single_action = agent.get_action(single_obs)
                     multi_actions[agent_name] = single_action
-                multi_next_obs, multi_rewards, multi_done, multi_truncations, infos = env.step(multi_actions)
+                # multi_next_obs, multi_rewards, multi_done, infos = env.step(multi_actions)
+                multi_next_obs, multi_rewards, multi_done, infos = env.step(leader_action=leader_action, follower_actions=multi_actions)
+                    
                 multi_obs = multi_next_obs
 
     # 4. save the agents' models

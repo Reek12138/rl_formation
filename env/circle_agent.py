@@ -91,7 +91,7 @@ class ReplayBuffer:
     
 class circle_agent():
     def __init__(self, radius, pos_x, pos_y, linear_vel = 0, orientation_vel = 0, orientation = 0, vel_x=0, vel_y=0,
-                memo_size = 10000, obs_dim = 40, state_dim = 5, n_agent = 4, action_dim = 2, alpha = 0.01 , beta = 0.01, 
+                memo_size = 100000, obs_dim = 40, state_dim = 5, n_agent = 4, action_dim = 2, alpha = 0.01 , beta = 0.01, 
                 fc1_dims = 64,fc2_dims = 64, gamma = 0.99 , tau = 0.01, batch_size = 512 ) -> None:
         
         #智能体的信息
