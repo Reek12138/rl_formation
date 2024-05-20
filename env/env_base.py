@@ -11,7 +11,7 @@ from math import sin, cos, tan, pi, sqrt
 from .rvo_inter import rvo_inter
 
 
-class CustomEnv():
+class CustomEnv:
     metadata = {'render.modes': ['human']}
 
     def __init__(self, num_agents=4, width=300, height=300, num_obstacles=15, agent_radius=5, safe_theta = 2,
@@ -35,11 +35,17 @@ class CustomEnv():
 
         # 生成circle_agent实例列表
         self.leader_agent = circle_agent(self.agent_radius, pos_x=50, pos_y=50)
+
+        self.follower_state_dim = 2 + 2 + 2*self.num_agents + 2*self.num_obstacles
         self.follower_agents = {
             f"agent_{i}": circle_agent(
-                agent_radius,
+                radius=agent_radius,
                 pos_x=self.leader_agent.pos_x + i*20 +np.random.rand() * 10,
-                pos_y=self.leader_agent.pos_y + i*20 +np.random.rand() * 10
+                pos_y=self.leader_agent.pos_y + i*20 +np.random.rand() * 10,
+                memo_size=1000,
+                obs_dim=self.follower_state_dim * (self.num_agents + 1),
+                state_dim=self.follower_state_dim,
+                action_dim=2
                 ) 
                 for i in range(self.num_agents)}
 
@@ -90,37 +96,58 @@ class CustomEnv():
             agent.set_linear_orientation(0,0)
             agent.orientation = 0
             
-        # 重置observations TODO 
-        self.observations = {}
-        self.leader_agent.observation = {}#自己的位置、到目标点的距离、到目标点的角度、和所有障碍物的距离、和所有障碍物的角度
-        self.observations["leader_agent"] = self.leader_agent.observation
-        for agent_id, agent in self.follower_agents.items():
-            agent.observation = {}  
-            self.observations[agent_id] = agent.observation
+        # # 重置observations TODO 
+        # observations = {}
+        # self.leader_agent.observation = {}#自己的位置、到目标点的距离、到目标点的角度、和所有障碍物的距离、和所有障碍物的角度
+        # observations["leader_agent"] = self.leader_agent.observation
+        # for agent_id, agent in self.follower_agents.items():
+        #     agent.observation = {}  
+        #     observations[agent_id] = agent.observation
 
-        # 重置rewards
-        self.rewards = {}
-        self.leader_agent.reward = 0
-        self.rewards['leader_agent'] = self.leader_agent.reward
-        for agent_id, agent in self.follower_agents.items():
-            agent.reward = 0  
-            self.rewards[agent_id] = agent.reward 
+        # # 重置rewards
+        # rewards = {}
+        # self.leader_agent.reward = 0
+        # rewards['leader_agent'] = self.leader_agent.reward
+        # for agent_id, agent in self.follower_agents.items():
+        #     agent.reward = 0  
+        #     rewards[agent_id] = agent.reward 
 
-        # 重置dones
-        self.dones = {}
-        self.leader_agent.done = False
-        self.dones['leader_agent'] = self.leader_agent.done
-        for agent_id, agent in self.follower_agents.items():
-            agent.done = False
-            self.dones[agent_id] = agent.done
+        # # 重置dones
+        # dones = {}
+        # self.leader_agent.done = False
+        # dones['leader_agent'] = self.leader_agent.done
+        # for agent_id, agent in self.follower_agents.items():
+        #     agent.done = False
+        #     dones[agent_id] = agent.done
 
-        # 重置infos
-        self.infos = {}
-        self.leader_agent.info = {}
-        self.infos['leader_agent'] = self.leader_agent.info
-        for agent_id, agent in self.follower_agents.items():
-            agent.info = {}
-            self.infos[agent_id] = agent.info
+        # # 重置infos
+        # infos = {}
+        # self.leader_agent.info = {}
+        # infos['leader_agent'] = self.leader_agent.info
+        # for agent_id, agent in self.follower_agents.items():
+        #     agent.info = {}
+        #     infos[agent_id] = agent.info
+        observations = {}
+        rewards = {}
+        dones = {}
+        infos = {}
+
+        observations["leader_agent"] = self.observe_leader(self.leader_agent, self.leader_target_pos)
+        # rewards["leader_agent"] = self._calculate_leader_reward(agent_id="leader_agent", agent=self.leader_agent, formation_target=self.leader_target_pos, action = leader_action)
+        dones["leader_agent"] = self.leader_agent.done
+        infos["leader_agent"] = self.leader_agent.info
+
+        for agent_id ,agent in self.follower_agents.items():
+            target_x = self.leader_agent.pos_x + self.formation_pos[agent_id][0]
+            target_y = self.leader_agent.pos_y + self.formation_pos[agent_id][1]
+            formation_target = [target_x, target_y]
+
+            observations[agent_id] = self.observe(agent_id, agent, formation_target)
+            # rewards[agent_id] = self._calculate_follower_reward(agent_id, agent, formation_target, follower_actions[agent_id])
+            dones[agent_id] = agent.done
+            infos[agent_id] = agent.info
+
+        return observations, infos
 
     def step(self, leader_action, follower_actions):
         """输入leader_action[线速度，角速度]
@@ -306,12 +333,45 @@ class CustomEnv():
             distance2target = np.linalg.norm(self.agent_pos[agent] - self.target_pos[agent])
             return distance2target < self.agent_pos + 2
 
-    def _calculate_leader_reward(self, agent_id, agent, formation_target, action ):
+    def _calculate_leader_reward(self, agent_id, agent, formation_target, action ):#TODO
         
-        pass
+        reward1 = self._caculate_leader_vo_reward(agent, formation_target, action )
+        reward2 = self._caculate_formation_reward(agent_id, agent, formation_target, action,  "leader" )
+        reward = reward1[2] + reward2
+        return reward
 
     def _calculate_follower_reward(self, check_agent_id, check_agent, formation_target, agent_action):#TODO
         # Calculate the reward for the agent
+        
+        reward1 =  self._caculate_follower_vo_reward(check_agent_id, check_agent, formation_target, agent_action)
+        reward2 = self._caculate_formation_reward(check_agent_id, check_agent, formation_target, agent_action, "follower")
+        reward = reward1[2] + reward2
+        return reward
+    
+    def _caculate_leader_vo_reward(self, agent, target, agent_action):
+        vx = agent.linear_orientation[0] * cos(agent.orientation)
+        vy = agent.linear_orientation[0] * sin(agent.orientation)
+        robot_state = [agent.pos_x, agent.pos_y, vx, vy, self.agent_radius]
+        nei_state_list = []
+        obs_cir_list = []
+        for obs in self.obstacles.values():
+            obs_state = [obs.pos_x, obs.pos_y, obs.xy_vel[0], obs.xy_vel[1], self.obs_radius]
+            obs_cir_list.append(obs_state)
+        obs_line_list = []
+        action = [vx, vy]
+        vo_flag, min_exp_time, min_dis = self.rvo_inter.config_vo_reward(robot_state=robot_state,
+                                                                                                                                        nei_state_list=nei_state_list,
+                                                                                                                                        obs_cir_list=obs_cir_list,
+                                                                                                                                        obs_line_list=obs_line_list,
+                                                                                                                                        action=action)
+        reward = [vo_flag, min_exp_time, min_dis]
+        return reward
+    
+    def _caculate_follower_vo_reward(self, check_agent_id, check_agent, formation_target, agent_action):
+        """
+        vo类信息
+        reward = [vo_flag, min_exp_time, min_dis]
+        """
         robot_state = [check_agent.pos_x, check_agent.pos_y, check_agent.xy_vel[0], check_agent.xy_vel[1], self.agent_radius]
         nei_state_list = []
         for agent_id, agent in self.follower_agents.items():
@@ -326,12 +386,26 @@ class CustomEnv():
 
         obs_line_list = []
         action = agent_action
+
         vo_flag, min_exp_time, min_dis = self.rvo_inter.config_vo_reward(robot_state=robot_state,
                                                                                                                                         nei_state_list=nei_state_list,
                                                                                                                                         obs_cir_list=obs_cir_list,
                                                                                                                                         obs_line_list=obs_line_list,
                                                                                                                                         action=action)
-        reward = min_dis
+        reward = [vo_flag, min_exp_time, min_dis]
+        return reward
+
+    def _caculate_formation_reward(self, check_agent_id, check_agent, formation_target, agent_action, agent_type):
+        """和编队目标之间的距离"""
+        dx = check_agent.pos_x - formation_target[0]
+        dy = check_agent.pos_y - formation_target[1]
+        dis = sqrt(dx**2 + dy**2)
+        if agent_type == "follower":
+            reward = - dis #TODO要不要考虑归一化
+        
+        if agent_type == "leader":
+            reward = - (dis / self.width) *1.2
+
         return reward
 
     @staticmethod
