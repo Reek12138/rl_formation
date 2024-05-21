@@ -36,7 +36,9 @@ class CustomEnv:
         # 生成circle_agent实例列表
         self.leader_agent = circle_agent(self.agent_radius, pos_x=50, pos_y=50, n_agent=1, 
                                          obs_dim=4+2*self.num_obstacles,
-                                         state_dim=4+2*self.num_obstacles)
+                                         state_dim=4+2*self.num_obstacles,
+                                         memo_size=100000,
+                                         action_dim=2)
 
         self.follower_state_dim = 2 + 2 + 2*(self.num_agents-1) + 2*self.num_obstacles
         self.follower_agents = {
@@ -44,7 +46,7 @@ class CustomEnv:
                 radius=agent_radius,
                 pos_x=self.leader_agent.pos_x + i*20 +np.random.rand() * 10,
                 pos_y=self.leader_agent.pos_y + i*20 +np.random.rand() * 10,
-                memo_size=10000,
+                memo_size=100000,
                 obs_dim=self.follower_state_dim ,
                 state_dim=self.follower_state_dim* (self.num_agents ),
                 action_dim=2
@@ -341,7 +343,8 @@ class CustomEnv:
         
         reward1 = self._caculate_leader_vo_reward(agent, formation_target, action )
         reward2 = self._caculate_formation_reward(agent_id, agent, formation_target, action,  "leader" )
-        reward = reward1[2] + reward2
+        # reward = reward1[2] + reward2
+        reward =  reward2
         return reward
 
     def _calculate_follower_reward(self, check_agent_id, check_agent, formation_target, agent_action):#TODO
@@ -349,7 +352,8 @@ class CustomEnv:
         
         reward1 =  self._caculate_follower_vo_reward(check_agent_id, check_agent, formation_target, agent_action)
         reward2 = self._caculate_formation_reward(check_agent_id, check_agent, formation_target, agent_action, "follower")
-        reward = reward1[2] + reward2
+        # reward = reward1[2] + reward2
+        reward =  reward2
         return reward
     
     def _caculate_leader_vo_reward(self, agent, target, agent_action):
@@ -408,7 +412,8 @@ class CustomEnv:
             reward = - dis #TODO要不要考虑归一化
         
         if agent_type == "leader":
-            reward = - (dis / self.width) *1.2
+            # reward = - (dis / self.width) *1.2
+            reward = - dis *1.2
 
         return reward
 

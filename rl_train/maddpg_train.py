@@ -82,7 +82,8 @@ for episode_i in range(NUM_EPISODE):
     multi_done = {agent_name: False for agent_name in agent_name_list}
 
     for step_i in range(NUM_STEP):
-        print("episode",episode_i,"step",step_i)
+        if step_i % 50 == 0:
+            print("episode",episode_i,"step",step_i)
 
         total_step = episode_i*NUM_STEP + step_i
 
@@ -151,8 +152,26 @@ for episode_i in range(NUM_EPISODE):
         if current_memo_size < BATCH_SIZE:
             batch_idx = range(0, current_memo_size)
         else:
-            batch_idx = np.random.choice(current_memo_size,  BATCH_SIZE)        
+            batch_idx = np.random.choice(current_memo_size,  BATCH_SIZE, replace=False)        
 
+        #leader_agent update
+        leader_batch_obses, leader_batch_next_obses, leader_batch_states, leader_batch_next_state, leader_batch_actions, leader_batch_rewards, leader_batch_dones  = env.leader_agent.replay_buffer.sample(batch_idx)
+        # single+batch 
+        leader_batch_obses_tensor = torch.tensor(leader_batch_obses, dtype = torch.float).to(device)
+        leader_batch_next_obses_tensor = torch.tensor(leader_batch_next_obses, dtype = torch.float).to(device)
+        leader_batch_states_tensor = torch.tensor(leader_batch_states, dtype = torch.float).to(device)
+        leader_batch_next_state_tensor = torch.tensor(leader_batch_next_state, dtype = torch.float).to(device)
+        leader_batch_actions_tensor = torch.tensor(leader_batch_actions, dtype = torch.float).to(device)
+        leader_batch_rewards_tensor = torch.tensor(leader_batch_rewards, dtype = torch.float).to(device)
+        leader_batch_dones_tensor = torch.tensor(leader_batch_dones, dtype = torch.float).to(device)
+
+        #target actor output
+        leader_single_batch_next_actions = env.leader_agent.target_actor.forward(leader_batch_next_obses_tensor)
+
+        #actor output
+        leader_single_batch_online_action = env.leader_agent.actor.forward(leader_batch_obses_tensor)
+
+        #follower agent update
         for agend_id, agent in env.follower_agents.items():
             batch_obses, batch_next_obses, batch_states, batch_next_state, batch_actions, batch_rewards, batch_dones  = agent.replay_buffer.sample(batch_idx)
             # single+batch 
@@ -192,6 +211,31 @@ for episode_i in range(NUM_EPISODE):
         # update critic and actor 
         if(total_step +1)% TARGET_UPDATE_INTERVAL == 0:
             # for agent_i in range(NUM_AGENT):
+            leader_critic_target_q = env.leader_agent.target_critic.forward(leader_batch_next_state_tensor, 
+                                                                            leader_batch_actions_tensor.detach())
+            leader_y = (leader_batch_rewards_tensor + (1 - leader_batch_dones_tensor) * env.leader_agent.gamma * leader_critic_target_q).flatten()
+
+            leader_critic_q = env.leader_agent.critic.forward(leader_batch_states_tensor, leader_batch_actions_tensor.detach()).flatten()
+
+            leader_critic_loss = nn.MSELoss()(leader_y, leader_critic_q)
+            env.leader_agent.critic.optimizer.zero_grad()
+            leader_critic_loss.backward()
+            env.leader_agent.critic.optimizer.step()
+
+            leader_actor_loss = env.leader_agent.critic.forward(leader_batch_states_tensor,
+                                                                leader_single_batch_online_action.detach()).flatten()
+            leader_actor_loss = -torch.mean(leader_actor_loss)
+            env.leader_agent.actor.optimizer.zero_grad()
+            leader_actor_loss.backward()
+            env.leader_agent.actor.optimizer.step()
+
+            # update target critic 
+            for target_param, param in zip(env.leader_agent.target_critic.parameters(), env.leader_agent.critic.parameters()):
+                target_param.data.copy_(env.leader_agent.tau * param.data + (1.0 - env.leader_agent.tau) * target_param.data)
+            # update target actor 
+            for target_param, param in zip(env.leader_agent.target_actor.parameters(), env.leader_agent.actor.parameters()):
+                target_param.data.copy_(env.leader_agent.tau * param.data + (1.0 - env.leader_agent.tau) * target_param.data)
+
             for agent_i, agent in enumerate(env.follower_agents.values()):
                 # agent = agents[agent_i]
 
@@ -237,24 +281,32 @@ for episode_i in range(NUM_EPISODE):
         # print(f"episode_reward:{episode_reward}")
         
     # 3. render the env
-    if (episode_i + 1) % 10 == 0:
+    if (episode_i + 1) % 100 == 0:
         env = CustomEnv()
-        for test_epi_i in range(10):
+        for test_epi_i in range(1):
             multi_obs, infos = env.reset()
-            print("render==========================")
+            print("rendering episode ", test_epi_i," ==========================")
             for step_i in range(NUM_STEP):
                 env.render(display_time=0.1)
 
-                multi_actions = {}
-                for agent_i, agent_name in enumerate(agent_name_list):
-                    agent = agents[agent_i]
-                    single_obs = multi_obs[agent_name]
+                # multi_actions = {}
+                # for agent_i, agent_name in enumerate(agent_name_list):
+                #     agent = agents[agent_i]
+                #     single_obs = multi_obs[agent_name]
+                #     single_action = agent.get_action(single_obs)
+                #     multi_actions[agent_name] = single_action
+                leader_action = env.leader_agent.get_action(multi_obs["leader_agent"])
+
+                multi_actions = {}#follower_action
+                for agent_id, agent in env.follower_agents.items():
+                    single_obs = multi_obs[agent_id]
                     single_action = agent.get_action(single_obs)
-                    multi_actions[agent_name] = single_action
+                    multi_actions[agent_id] = single_action
                 # multi_next_obs, multi_rewards, multi_done, infos = env.step(multi_actions)
                 multi_next_obs, multi_rewards, multi_done, infos = env.step(leader_action=leader_action, follower_actions=multi_actions)
                     
                 multi_obs = multi_next_obs
+                env.render_close()
 
     # 4. save the agents' models
     if episode_i == 0:
@@ -262,12 +314,17 @@ for episode_i in range(NUM_EPISODE):
     if episode_reward > highest_reward:
         highest_reward = episode_reward
         print(f"Highest reward updated at episode{episode_i}: {round(highest_reward,2)}")
-        for agent_i in range(NUM_AGENT):
-            agent = agents[agent_i]
-            flag = os.path.exists(agent_path)
-            if not flag:
-                os.makedirs(agent_path)
-            torch.save(agent.actor.state_dict(), f"{agent_path}" + f"agent_{agent_i}_actor_{scenario}_{timestamp}.pth")
+        
+        flag = os.path.exists(agent_path)
+        if not flag:
+            os.makedirs(agent_path)
+        torch.save(env.leader_agent.actor.state_dict(), f"{agent_path}" + f"leader_agent_actor_{scenario}.pth")
+
+        for agent in env.follower_agents.values():
+            # if not flag:
+            #     os.makedirs(agent_path)
+            # torch.save(agent.actor.state_dict(), f"{agent_path}" + f"agent_{agent_i}_actor_{scenario}_{timestamp}.pth")
+            torch.save(agent.actor.state_dict(), f"{agent_path}" + f"agent_{agent_i}_actor_{scenario}.pth")
 
 
 
