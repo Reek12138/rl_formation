@@ -42,7 +42,8 @@ class Actor(nn.Module):
     def forward(self, state):
         x = F.relu((self.fcl(state)))
         x = F.relu((self.fc2(x)))
-        mu = torch.softmax(self.pi(x),dim=1)
+        # mu = torch.softmax(self.pi(x),dim=1)
+        mu = torch.sigmoid(self.pi(x))
         return mu
     
     def save_checkpoint(self, checkpoint_file):
@@ -90,9 +91,9 @@ class ReplayBuffer:
     
     
 class circle_agent():
-    def __init__(self, radius, pos_x, pos_y, linear_vel = 0, orientation_vel = 0, orientation = 0, vel_x=0, vel_y=0,
+    def __init__(self, radius, pos_x, pos_y, linear_vel = 0, orientation_vel = 0, orientation = np.pi/4, vel_x=0, vel_y=0,
                 memo_size = 100000, obs_dim = 40, state_dim = 5, n_agent = 4, action_dim = 2, alpha = 0.01 , beta = 0.01, 
-                fc1_dims = 64,fc2_dims = 64, gamma = 0.99 , tau = 0.01, batch_size = 512 ) -> None:
+                fc1_dims = 64,fc2_dims = 64, gamma = 0.99 , tau = 0.01, batch_size = 512, max_vel = 10) -> None:
         
         #智能体的信息
         self.radius = radius
@@ -105,6 +106,7 @@ class circle_agent():
         self.xy_vel = [vel_x, vel_y]
         self.linear_orientation = [linear_vel,  orientation_vel]
         self.orientation = orientation
+        self.max_vel = max_vel
 
         #智能体rl配置
         self.gamma = gamma
@@ -139,13 +141,28 @@ class circle_agent():
     def set_linear_orientation(self, linear_vel, orientation):
         self.linear_orientation = [linear_vel, orientation]
     
-    def get_action(self, obs):
+    def get_action(self, obs, mode):
         single_obs = torch.tensor(data=obs, dtype=torch.float).unsqueeze(0).to(device)
         single_action = self.actor.forward(single_obs)
-        noise = torch.randn(self.action_dim).to(device) * 0.2
-        single_action = torch.clamp(input=single_action + noise, min=0.0, max=1.0)
+        noise = torch.randn(self.action_dim).to(device)
+        # single_action = torch.clamp(input=single_action + noise, min=0.0, max=1.0)
+        # Combine action and noise in 1:0.5 ratio
+        
 
-        return single_action.detach().cpu().numpy()[0]
+        if mode == "a":
+            mixed_action = (1 * single_action + 1.5 * noise) / 2.5
+        elif mode == "b":
+            mixed_action = (1 * single_action + 1.0 * noise) / 2.0
+        elif mode == "c":
+            mixed_action = (1 * single_action + 0.5 * noise) / 1.5
+        elif mode == "d":
+            mixed_action = (1 * single_action + 0.2 * noise) / 1.2
+        
+        # Clamp the mixed action to be within valid bounds
+        clamped_action = torch.clamp(mixed_action, min=0.0, max=1.0)
+        action = clamped_action.detach().cpu().numpy()[0]
+        
+        return action
     
     def save_model(self, filename):
         self.actor.save_checkpoint(filename)

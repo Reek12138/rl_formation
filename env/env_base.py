@@ -11,6 +11,9 @@ from math import sin, cos, tan, pi, sqrt
 from .rvo_inter import rvo_inter
 
 
+
+LEADER_MAX_LINEAR_VEL = 10
+
 class CustomEnv:
     metadata = {'render.modes': ['human']}
 
@@ -35,8 +38,10 @@ class CustomEnv:
 
         # 生成circle_agent实例列表
         self.leader_agent = circle_agent(self.agent_radius, pos_x=50, pos_y=50, n_agent=1, 
-                                         obs_dim=4+2*self.num_obstacles,
-                                         state_dim=4+2*self.num_obstacles,
+                                        #  obs_dim=4+2*self.num_obstacles,
+                                         obs_dim=6,
+                                        #  state_dim=4+2*self.num_obstacles,
+                                         state_dim=6,
                                          memo_size=100000,
                                          action_dim=2)
 
@@ -90,6 +95,7 @@ class CustomEnv:
         self.leader_agent.set_xy_vel(0,0)
         self.leader_agent.set_linear_orientation(0,0)
         self.leader_agent.orientation = 0
+        self.leader_agent.done = False
         # for i,agent in enumerate(self.follower_agents.values()):
         #     agent.set_position(self.leader_agent.pos_x + self.formation_pos[i][0]*15 + np.random.rand() * 5,
         #                         self.leader_agent.pos_y + self.formation_pos[i][1]*15 + np.random.rand() * 5)
@@ -99,6 +105,7 @@ class CustomEnv:
             agent.set_xy_vel(0,0)
             agent.set_linear_orientation(0,0)
             agent.orientation = 0
+            agent.done = False
             
         # # 重置observations TODO 
         # observations = {}
@@ -194,15 +201,25 @@ class CustomEnv:
     
     def _apply_leader_action(self, agent, action):
         """假设输入的动作是[线速度m/s,角速度 弧度]"""
-        new_orientation = agent.orientation + action[1]*self.display_time
+        linear_vel = action[0] * LEADER_MAX_LINEAR_VEL
+        # linear_vel = action[0] 
+        angular_vel = -(action[1]-0.5) * (np.pi)
+        # new_orientation = agent.orientation + action[1]*self.display_time
+        new_orientation = agent.orientation + angular_vel*self.display_time
         new_orientation % (2*np.pi)
 
-        dx = action[0] * self.display_time * cos(new_orientation)
-        dy = action[0] * self.display_time * sin(new_orientation)
+        # dx = action[0] * self.display_time * cos(new_orientation)
+        # dy = action[0] * self.display_time * sin(new_orientation)
+        dx = linear_vel * self.display_time * cos(new_orientation)
+        dy = linear_vel * self.display_time * sin(new_orientation)
         x = agent.pos_x + dx
         y = agent.pos_y + dy
         new_pos = [x,y]
-        if not self._check_obs_collision(agent, new_pos):
+        if x<0 or x>300 or y<0 or y>300:
+            flag = True
+        else:
+            flag = False
+        if not self._check_obs_collision(agent, new_pos)and not flag:
             agent.set_position(x, y)  
             agent.set_linear_orientation(action[0], action[1])
             agent.orientation = new_orientation
@@ -252,7 +269,8 @@ class CustomEnv:
             obs_distance, obs_angle = CustomEnv.calculate_relative_distance_and_angle(self_pos, obs_pos)
             obs_distance_angle.extend([obs_distance, obs_angle])
         
-        observation = np.array(self_pos + [target_dis, target_angle] + obs_distance_angle)
+        # observation = np.array(self_pos + [target_dis, target_angle] + obs_distance_angle)
+        observation = np.array(self_pos + self.leader_target_pos.tolist() + [target_dis, target_angle])
 
         return observation
 
@@ -343,8 +361,12 @@ class CustomEnv:
         
         reward1 = self._caculate_leader_vo_reward(agent, formation_target, action )
         reward2 = self._caculate_formation_reward(agent_id, agent, formation_target, action,  "leader" )
+        if agent.pos_x < 0 or agent.pos_x > 300 or agent.pos_y < 0 or agent.pos_y >300:
+            punishment = -200
+        else:
+            punishment = 0
         # reward = reward1[2] + reward2
-        reward =  reward2
+        reward =  reward2 + punishment
         return reward
 
     def _calculate_follower_reward(self, check_agent_id, check_agent, formation_target, agent_action):#TODO
@@ -413,7 +435,21 @@ class CustomEnv:
         
         if agent_type == "leader":
             # reward = - (dis / self.width) *1.2
-            reward = - dis *1.2
+            if dis >= 200:
+                extra_reward = 0
+            elif 200 < dis <= 250 :
+                extra_reward = 50
+            elif 150 < dis <= 200:
+                extra_reward = 75
+            elif 100 < dis <= 150:
+                extra_reward = 100
+            elif 50 < dis <= 100:
+                extra_reward = 130
+            elif dis <= 50:
+                extra_reward = 170
+
+            
+            reward = extra_reward - dis /1.414
 
         return reward
 
