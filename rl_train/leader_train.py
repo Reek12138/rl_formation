@@ -5,6 +5,9 @@ import os
 import time
 import torch.cuda
 import sys
+from numpy import inf
+import torch.nn.functional as F
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
@@ -53,12 +56,13 @@ for agent in env.follower_agents.values():
     agents.append(agent)
 
 # 2. main training loop
+episode_highest_reward = -inf    
 for episode_i in range(NUM_EPISODE):
     # print("reset2==========================")
     
 
     multi_obs, infos = env.reset()
-    if os.path.exists(agent_path) and episode_i > 1500:
+    if os.path.exists(agent_path) and episode_i > NUM_EPISODE*(4/6):
         env.leader_agent.actor.load_checkpoint(f"{agent_path}" + f"leader_agent_actor_{scenario}.pth")
         env.leader_agent.target_actor.load_checkpoint(f"{agent_path}" + f"leader_agent_target_actor_{scenario}.pth")
         env.leader_agent.critic.load_checkpoint(f"{agent_path}" + f"leader_agent_critic_{scenario}.pth")
@@ -73,23 +77,21 @@ for episode_i in range(NUM_EPISODE):
 
     # print(multi_obs)
 
-    leader_episode_reward = -300
+    # leader_episode_reward = 0
     multi_done = {agent_name: False for agent_name in agent_name_list}
     multi_done["leader_agent"] = False
     # print(multi_done)
 
-    if episode_i == 0:
-            leader_highest_reward = leader_episode_reward
-
-    print("episode",episode_i,"========================HIGHEST REWARD : ", leader_highest_reward)
-
+    
+    if episode_i >0:
+        print("episode",episode_i,"========================HIGHEST REWARD : ", leader_highest_reward)
+    av_Q = 0
+    max_Q = -inf
+    av_loss = 0
+    episode_reward = 0
     for step_i in range(NUM_STEP):
-
-
-        if step_i % 100 == 0:
-            print("episode",episode_i,"step",step_i)
-            print("EPISODE_REWARD : ",leader_episode_reward)
-
+        if episode_i == 0 and step_i == 0:
+            leader_highest_reward = -inf
 
         total_step = episode_i*NUM_STEP + step_i
 
@@ -104,13 +106,8 @@ for episode_i in range(NUM_EPISODE):
             
         multi_next_obs, multi_rewards, multi_done, infos = env.step(leader_action=leader_action, follower_actions=multi_actions)
         
-        
-            
-        # leader_episode_reward = multi_rewards["leader_agent"]
+        episode_reward = multi_rewards["leader_agent"] + episode_reward*0.9
 
-        # print("multi_next_obs : ", multi_next_obs)
-        # print("multi_rewards : ", multi_rewards)
-        # print("multi_dones : ", multi_done)
         if step_i >= NUM_STEP -1:
         # multi_done = {agnet_name :True for agnet_name in agent_name_list}
             env.leader_agent.done = True
@@ -134,23 +131,6 @@ for episode_i in range(NUM_EPISODE):
         else:
             batch_idx = np.random.choice(current_memo_size,  BATCH_SIZE, replace=False)        
 
-        # #leader_agent update
-        # leader_batch_obses, leader_batch_next_obses, leader_batch_states, leader_batch_next_state, leader_batch_actions, leader_batch_rewards, leader_batch_dones  = env.leader_agent.replay_buffer.sample(batch_idx)
-        # # single+batch 
-        # leader_batch_obses_tensor = torch.tensor(leader_batch_obses, dtype = torch.float).to(device)
-        # leader_batch_next_obses_tensor = torch.tensor(leader_batch_next_obses, dtype = torch.float).to(device)
-        # leader_batch_states_tensor = torch.tensor(leader_batch_states, dtype = torch.float).to(device)
-        # leader_batch_next_state_tensor = torch.tensor(leader_batch_next_state, dtype = torch.float).to(device)
-        # leader_batch_actions_tensor = torch.tensor(leader_batch_actions, dtype = torch.float).to(device)
-        # leader_batch_rewards_tensor = torch.tensor(leader_batch_rewards, dtype = torch.float).to(device)
-        # leader_batch_dones_tensor = torch.tensor(leader_batch_dones, dtype = torch.float).to(device)
-
-        # #target actor output
-        # leader_single_batch_next_actions = env.leader_agent.target_actor.forward(leader_batch_next_obses_tensor)
-
-        # #actor output
-        # leader_single_batch_online_action = env.leader_agent.actor.forward(leader_batch_obses_tensor)
-
         # update critic and actor 
         if(total_step +1)% TARGET_UPDATE_INTERVAL == 0:
         # if leader_episode_reward > leader_highest_reward:
@@ -167,49 +147,103 @@ for episode_i in range(NUM_EPISODE):
             leader_batch_rewards_tensor = torch.tensor(leader_batch_rewards, dtype = torch.float).to(device)
             leader_batch_dones_tensor = torch.tensor(leader_batch_dones, dtype = torch.float).to(device)
 
-            #target actor output
-            leader_single_batch_next_actions = env.leader_agent.target_actor.forward(leader_batch_next_obses_tensor)
+            leader_next_action = env.leader_agent.target_actor(leader_batch_next_state_tensor)
+            noise = torch.Tensor(leader_batch_actions).data.normal_(0,0.2).to(device)
+            noise = noise.clamp(-0.5, 0.5)
+            leader_next_action = (leader_next_action + noise).clamp(-1,1)
 
-            #actor output
-            leader_single_batch_online_action = env.leader_agent.actor.forward(leader_batch_obses_tensor)
+            target_q1, target_q2 = env.leader_agent.target_critic(leader_batch_next_state_tensor, leader_next_action)
 
+            target_q = torch.min(target_q1, target_q2)
+            av_Q += torch.min(target_q)
+            max_Q = max(max_Q, torch.max(target_q))
 
-            # for agent_i in range(NUM_AGENT):
-            leader_critic_target_q = env.leader_agent.target_critic.forward(leader_batch_next_state_tensor, 
-                                                                            leader_batch_actions_tensor.detach())
-            leader_y = (leader_batch_rewards_tensor + (1 - leader_batch_dones_tensor) * env.leader_agent.gamma * leader_critic_target_q).flatten()
+            target_q = leader_batch_rewards_tensor + ((1-leader_batch_dones_tensor)*env.leader_agent.gamma*target_q).detach()
 
-            leader_critic_q = env.leader_agent.critic.forward(leader_batch_states_tensor, leader_batch_actions_tensor.detach()).flatten()
+            current_q1, current_q2 = env.leader_agent.critic(leader_batch_states_tensor, leader_batch_actions_tensor)
 
-            leader_critic_loss = nn.MSELoss()(leader_y, leader_critic_q)
+            leader_loss = F.mse_loss(current_q1, target_q) + F.mse_loss(current_q2, target_q)
+
             env.leader_agent.critic.optimizer.zero_grad()
-            leader_critic_loss.backward()
+            leader_loss.backward()
             env.leader_agent.critic.optimizer.step()
 
-            leader_actor_loss = env.leader_agent.critic.forward(leader_batch_states_tensor,
-                                                                leader_single_batch_online_action.detach()).flatten()
-            leader_actor_loss = -torch.mean(leader_actor_loss)
-            env.leader_agent.actor.optimizer.zero_grad()
-            leader_actor_loss.backward()
-            env.leader_agent.actor.optimizer.step()
+            if(total_step+1)/2 ==0:
+                actor_grad, _ = env.leader_agent.critic(leader_batch_states_tensor, env.leader_agent.actor(leader_batch_states_tensor))
+                actor_grad = -actor_grad.mean()
+                env.leader_agent.actor.optimizer.zero_grad()
+                actor_grad.backward()
+                env.leader_agent.actor.optimizer.step()
 
-            # update target critic 
-            for target_param, param in zip(env.leader_agent.target_critic.parameters(), env.leader_agent.critic.parameters()):
-                target_param.data.copy_(env.leader_agent.tau * param.data + (1.0 - env.leader_agent.tau) * target_param.data)
-            # update target actor 
-            for target_param, param in zip(env.leader_agent.target_actor.parameters(), env.leader_agent.actor.parameters()):
-                target_param.data.copy_(env.leader_agent.tau * param.data + (1.0 - env.leader_agent.tau) * target_param.data)
+                # update target critic 
+                for target_param, param in zip(env.leader_agent.target_critic.parameters(), env.leader_agent.critic.parameters()):
+                    target_param.data.copy_(env.leader_agent.tau * param.data + (1.0 - env.leader_agent.tau) * target_param.data)
+                # update target actor 
+                for target_param, param in zip(env.leader_agent.target_actor.parameters(), env.leader_agent.actor.parameters()):
+                    target_param.data.copy_(env.leader_agent.tau * param.data + (1.0 - env.leader_agent.tau) * target_param.data)
+            
+            av_loss += leader_loss
+
+
+
+
+
+
+
+
+
+
+
+
+
+            # ==========================================================================
+            # #target actor output
+            # leader_single_batch_next_actions = env.leader_agent.target_actor.forward(leader_batch_next_obses_tensor)
+
+            # #actor output
+            # leader_single_batch_online_action = env.leader_agent.actor.forward(leader_batch_obses_tensor)
+
+
+            # # for agent_i in range(NUM_AGENT):
+            # leader_critic_target_q = env.leader_agent.target_critic.forward(leader_batch_next_state_tensor, 
+            #                                                                 leader_batch_actions_tensor.detach())
+            # leader_y = (leader_batch_rewards_tensor + (1 - leader_batch_dones_tensor) * env.leader_agent.gamma * leader_critic_target_q).flatten()
+
+            # leader_critic_q = env.leader_agent.critic.forward(leader_batch_states_tensor, leader_batch_actions_tensor.detach()).flatten()
+
+            # leader_critic_loss = nn.MSELoss()(leader_y, leader_critic_q)
+            # env.leader_agent.critic.optimizer.zero_grad()
+            # leader_critic_loss.backward()
+            # env.leader_agent.critic.optimizer.step()
+
+            # leader_actor_loss = env.leader_agent.critic.forward(leader_batch_states_tensor,
+            #                                                     leader_single_batch_online_action.detach()).flatten()
+            # leader_actor_loss = -torch.mean(leader_actor_loss)
+            # env.leader_agent.actor.optimizer.zero_grad()
+            # leader_actor_loss.backward()
+            # env.leader_agent.actor.optimizer.step()
+
+            # # update target critic 
+            # for target_param, param in zip(env.leader_agent.target_critic.parameters(), env.leader_agent.critic.parameters()):
+            #     target_param.data.copy_(env.leader_agent.tau * param.data + (1.0 - env.leader_agent.tau) * target_param.data)
+            # # update target actor 
+            # for target_param, param in zip(env.leader_agent.target_actor.parameters(), env.leader_agent.actor.parameters()):
+            #     target_param.data.copy_(env.leader_agent.tau * param.data + (1.0 - env.leader_agent.tau) * target_param.data)
+        # ===============================================================
+            
 
         multi_obs = multi_next_obs
         leader_episode_reward = multi_rewards["leader_agent"]
 
+        if step_i % 100 == 0:
+            print("episode",episode_i,"step",step_i, "      REWARD : ",leader_episode_reward, "    EPISODE_REWARD : ", episode_reward)
+
         if multi_done["leader_agent"]:
             break
 
-
-
-
-
+        if infos["leader_agent"]:
+            print("**************REACH GOAL****************")
+            break
 
         # 4. save the agents' models
         

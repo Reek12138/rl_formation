@@ -9,18 +9,41 @@ class Critic(nn.Module):
     def __init__(self, lr_critic, input_dims, fc1_dims, fc2_dims, n_agent,action_dim) :
         super(Critic, self).__init__()
 
-        self.fcl = nn.Linear(input_dims + n_agent * action_dim, fc1_dims)
-        self.fc2 = nn.Linear(fc1_dims, fc2_dims)
+        self.fcl = nn.Linear(input_dims, fc1_dims)
+        self.fc2_s = nn.Linear(fc1_dims, fc2_dims)
+        self.fc2_a = nn.Linear(action_dim, fc2_dims)
         self.q = nn.Linear(fc2_dims, out_features=1)
+
+        self.fcl_ = nn.Linear(input_dims, fc1_dims)
+        self.fc2_s_ = nn.Linear(fc1_dims, fc2_dims)
+        self.fc2_a_ = nn.Linear(action_dim, fc2_dims)
+        self.q_ = nn.Linear(fc2_dims, out_features=1)
 
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr_critic)
 
     def forward(self, state,action):
-        x = torch.cat([state, action], dim=1)
-        x = F.relu((self.fcl(x)))
-        x = F.relu((self.fc2(x)))
-        q = self.q(x)
-        return q
+        # x = torch.cat([state, action], dim=1)
+        # x = F.relu((self.fcl(x)))
+        # x = F.relu((self.fc2(x)))
+        # q = self.q(x)
+        # return q
+        s1 = F.relu(self.fcl(state))
+        self.fc2_s(s1)
+        self.fc2_a(action)
+        s11 = torch.mm(s1, self.fc2_s.weight.data.t())
+        s12 = torch.mm(action, self.fc2_a.weight.data.t())
+        s1 = F.relu(s11 + s12 + self.fc2_a.bias.data)
+        q1 = self.q(s1)
+
+        s2 = F.relu(self.fcl_(state))
+        self.fc2_s_(s2)
+        self.fc2_a_(action)
+        s21 = torch.mm(s2, self.fc2_s_.weight.data.t())
+        s22 = torch.mm(action, self.fc2_a_.weight.data.t())
+        s2 = F.relu(s21 + s22 + self.fc2_a_.bias.data)
+        q2 = self.q(s2)
+
+        return q1, q2
     
     def save_checkpoint(self, checkpoint_file):
         torch.save(self.state_dict(), checkpoint_file)
@@ -36,14 +59,14 @@ class Actor(nn.Module):
         self.fcl = nn.Linear(input_dims, fc1_dims)
         self.fc2 = nn.Linear(fc1_dims, fc2_dims)
         self.pi = nn.Linear(fc2_dims, action_dim)
-
+        self.tanh = nn.Tanh()
         self.optimizer = torch.optim.Adam(self.parameters(), lr=lr_actor)
 
     def forward(self, state):
         x = F.relu((self.fcl(state)))
         x = F.relu((self.fc2(x)))
         # mu = torch.softmax(self.pi(x),dim=1)
-        mu = torch.sigmoid(self.pi(x))
+        mu = self.tanh(self.pi(x))
         return mu
     
     def save_checkpoint(self, checkpoint_file):

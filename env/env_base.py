@@ -206,9 +206,9 @@ class CustomEnv:
     
     def _apply_leader_action(self, agent, action, target):
         """假设输入的动作是[线速度m/s,角速度 弧度]"""
-        linear_vel = action[0] * LEADER_MAX_LINEAR_VEL
+        linear_vel = ((action[0]+1)/2) * LEADER_MAX_LINEAR_VEL
         # linear_vel = action[0] 
-        angular_vel = -(action[1]-0.5) * (np.pi)
+        angular_vel = -(action[1]) * (np.pi/2)
         # new_orientation = agent.orientation + action[1]*self.display_time
         new_orientation = agent.orientation + angular_vel*self.display_time
         new_orientation % (2*np.pi)
@@ -454,21 +454,22 @@ class CustomEnv:
         
         if agent_type == "leader":
             # reward = - (dis / self.width) *1.2
-            if dis >= 200:
+            dis_ = dis/1.414
+            if dis_ >= 250:
                 extra_reward = 0
-            elif 200 < dis <= 250 :
+            elif 200 < dis_ <= 250 :
                 extra_reward = 20
-            elif 150 < dis <= 200:
+            elif 150 < dis_ <= 200:
                 extra_reward = 30
-            elif 100 < dis <= 150:
+            elif 100 < dis_ <= 150:
                 extra_reward = 40
-            elif 50 < dis <= 100:
+            elif 50 < dis_ <= 100:
                 extra_reward = 50
-            elif dis <= 50:
+            elif dis_ <= 50:
                 extra_reward = 60
 
             
-            reward = action[0]*10 -abs(action[1]*20) + extra_reward - dis /(1.414*3)
+            reward = action[0]*10 -abs(action[1]*10) + extra_reward - dis /(1.414*3)
 
         return reward
 
