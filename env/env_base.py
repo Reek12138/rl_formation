@@ -39,9 +39,9 @@ class CustomEnv:
         # 生成circle_agent实例列表
         self.leader_agent = circle_agent(self.agent_radius, pos_x=50, pos_y=50, n_agent=1, 
                                         #  obs_dim=4+2*self.num_obstacles,
-                                         obs_dim=6,
+                                         obs_dim=4,
                                         #  state_dim=4+2*self.num_obstacles,
-                                         state_dim=6,
+                                         state_dim=4,
                                          memo_size=100000,
                                          action_dim=2)
 
@@ -96,6 +96,7 @@ class CustomEnv:
         self.leader_agent.set_linear_orientation(0,0)
         self.leader_agent.orientation = 0
         self.leader_agent.done = False
+        self.leader_agent.target = False
         # for i,agent in enumerate(self.follower_agents.values()):
         #     agent.set_position(self.leader_agent.pos_x + self.formation_pos[i][0]*15 + np.random.rand() * 5,
         #                         self.leader_agent.pos_y + self.formation_pos[i][1]*15 + np.random.rand() * 5)
@@ -106,6 +107,7 @@ class CustomEnv:
             agent.set_linear_orientation(0,0)
             agent.orientation = 0
             agent.done = False
+            agent.target = False
             
         # # 重置observations TODO 
         # observations = {}
@@ -141,12 +143,12 @@ class CustomEnv:
         observations = {}
         rewards = {}
         dones = {}
-        infos = {}
+        target_infos = {}
 
         observations["leader_agent"] = self.observe_leader(self.leader_agent, self.leader_target_pos)
         # rewards["leader_agent"] = self._calculate_leader_reward(agent_id="leader_agent", agent=self.leader_agent, formation_target=self.leader_target_pos, action = leader_action)
         dones["leader_agent"] = self.leader_agent.done
-        infos["leader_agent"] = self.leader_agent.info
+        target_infos["leader_agent"] = self.leader_agent.target
 
         for agent_id ,agent in self.follower_agents.items():
             target_x = self.leader_agent.pos_x + self.formation_pos[agent_id][0]
@@ -158,9 +160,9 @@ class CustomEnv:
             # print(agent_id,observations[agent_id])
             # rewards[agent_id] = self._calculate_follower_reward(agent_id, agent, formation_target, follower_actions[agent_id])
             dones[agent_id] = agent.done
-            infos[agent_id] = agent.info
+            target_infos[agent_id] = agent.info
 
-        return observations, infos
+        return observations, target_infos
 
     def step(self, leader_action, follower_actions):
         """输入leader_action[线速度，角速度]
@@ -169,10 +171,13 @@ class CustomEnv:
                                                                  "agent_2": action,
                                                                  "agent_3": action }"""
         
-        self._apply_leader_action(self.leader_agent, leader_action)
+        self._apply_leader_action(self.leader_agent, leader_action, self.leader_target_pos)
 
         for agent_id,action in follower_actions.items():
-            self._apply_follower_action(self.follower_agents[agent_id], action)
+            target_x = self.leader_agent.pos_x + self.formation_pos[agent_id][0]
+            target_y = self.leader_agent.pos_y + self.formation_pos[agent_id][1]
+            formation_target = [target_x, target_y]
+            self._apply_follower_action(self.follower_agents[agent_id], action, formation_target)
 
         for agent_id, agent in self.follower_agents.items():
             self._check_follower_agent_collision(agent_id, agent)
@@ -180,12 +185,12 @@ class CustomEnv:
         observations = {}
         rewards = {}
         dones = {}
-        infos = {}
+        target_infos = {}
 
         observations["leader_agent"] = self.observe_leader(self.leader_agent, self.leader_target_pos)
         rewards["leader_agent"] = self._calculate_leader_reward(agent_id="leader_agent", agent=self.leader_agent, formation_target=self.leader_target_pos, action = leader_action)
         dones["leader_agent"] = self.leader_agent.done
-        infos["leader_agent"] = self.leader_agent.info
+        target_infos["leader_agent"] = self.leader_agent.target
 
         for agent_id ,agent in self.follower_agents.items():
             target_x = self.leader_agent.pos_x + self.formation_pos[agent_id][0]
@@ -195,11 +200,11 @@ class CustomEnv:
             observations[agent_id] = self.observe(agent_id, agent, formation_target)
             rewards[agent_id] = self._calculate_follower_reward(agent_id, agent, formation_target, follower_actions[agent_id])
             dones[agent_id] = agent.done
-            infos[agent_id] = agent.info
+            target_infos[agent_id] = agent.target
 
-        return observations, rewards, dones, infos
+        return observations, rewards, dones, target_infos
     
-    def _apply_leader_action(self, agent, action):
+    def _apply_leader_action(self, agent, action, target):
         """假设输入的动作是[线速度m/s,角速度 弧度]"""
         linear_vel = action[0] * LEADER_MAX_LINEAR_VEL
         # linear_vel = action[0] 
@@ -208,17 +213,21 @@ class CustomEnv:
         new_orientation = agent.orientation + angular_vel*self.display_time
         new_orientation % (2*np.pi)
 
-        # dx = action[0] * self.display_time * cos(new_orientation)
-        # dy = action[0] * self.display_time * sin(new_orientation)
         dx = linear_vel * self.display_time * cos(new_orientation)
         dy = linear_vel * self.display_time * sin(new_orientation)
         x = agent.pos_x + dx
         y = agent.pos_y + dy
         new_pos = [x,y]
+
+        target_dis  = sqrt((x-target[0])**2 + (y-target[1])**2)
+        if target_dis < 3:
+            agent.target = True
+
         if x<0 or x>300 or y<0 or y>300:
             flag = True
         else:
             flag = False
+
         if not self._check_obs_collision(agent, new_pos)and not flag:
             agent.set_position(x, y)  
             agent.set_linear_orientation(action[0], action[1])
@@ -226,13 +235,18 @@ class CustomEnv:
         else:
             agent.done = True
 
-    def _apply_follower_action(self, agent, action):
+    def _apply_follower_action(self, agent, action, target):
         """ 假设输入的是xy轴的速度"""
         dx = action[0] * self.display_time 
         dy = action[1] * self.display_time
         x = agent.pos_x + dx
         y = agent.pos_y + dy
         new_pos = [x,y]
+
+        target_dis  = sqrt((x-target[0])**2 + (y-target[1])**2)
+        if target_dis < 3:
+            agent.target = True             
+
         if not self._check_obs_collision(agent, new_pos):
             agent.set_position(x, y)  
             agent.set_xy_vel(action[0], action[1])
@@ -270,7 +284,7 @@ class CustomEnv:
             obs_distance_angle.extend([obs_distance, obs_angle])
         
         # observation = np.array(self_pos + [target_dis, target_angle] + obs_distance_angle)
-        observation = np.array(self_pos + self.leader_target_pos.tolist() + [target_dis, target_angle])
+        observation = np.array(self_pos + [target_dis, target_angle])
 
         return observation
 
@@ -361,12 +375,9 @@ class CustomEnv:
         
         reward1 = self._caculate_leader_vo_reward(agent, formation_target, action )
         reward2 = self._caculate_formation_reward(agent_id, agent, formation_target, action,  "leader" )
-        if agent.pos_x < 0 or agent.pos_x > 300 or agent.pos_y < 0 or agent.pos_y >300:
-            punishment = -200
-        else:
-            punishment = 0
+        
         # reward = reward1[2] + reward2
-        reward =  reward2 + punishment
+        reward =  reward2 
         return reward
 
     def _calculate_follower_reward(self, check_agent_id, check_agent, formation_target, agent_action):#TODO
@@ -425,31 +436,39 @@ class CustomEnv:
         reward = [vo_flag, min_exp_time, min_dis]
         return reward
 
-    def _caculate_formation_reward(self, check_agent_id, check_agent, formation_target, agent_action, agent_type):
+    def _caculate_formation_reward(self, check_agent_id, check_agent, formation_target, action, agent_type):
         """和编队目标之间的距离"""
         dx = check_agent.pos_x - formation_target[0]
         dy = check_agent.pos_y - formation_target[1]
         dis = sqrt(dx**2 + dy**2)
+
+
+        if check_agent.done:
+            return -100
+        
+        if check_agent.target:
+            return 200
+
         if agent_type == "follower":
-            reward = - dis #TODO要不要考虑归一化
+            reward = - dis/3 #TODO要不要考虑归一化
         
         if agent_type == "leader":
             # reward = - (dis / self.width) *1.2
             if dis >= 200:
                 extra_reward = 0
             elif 200 < dis <= 250 :
-                extra_reward = 50
+                extra_reward = 20
             elif 150 < dis <= 200:
-                extra_reward = 75
+                extra_reward = 30
             elif 100 < dis <= 150:
-                extra_reward = 100
+                extra_reward = 40
             elif 50 < dis <= 100:
-                extra_reward = 130
+                extra_reward = 50
             elif dis <= 50:
-                extra_reward = 170
+                extra_reward = 60
 
             
-            reward = extra_reward - dis /1.414
+            reward = action[0]*10 -abs(action[1]*20) + extra_reward - dis /(1.414*3)
 
         return reward
 

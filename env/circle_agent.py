@@ -93,7 +93,7 @@ class ReplayBuffer:
 class circle_agent():
     def __init__(self, radius, pos_x, pos_y, linear_vel = 0, orientation_vel = 0, orientation = np.pi/4, vel_x=0, vel_y=0,
                 memo_size = 100000, obs_dim = 40, state_dim = 5, n_agent = 4, action_dim = 2, alpha = 0.01 , beta = 0.01, 
-                fc1_dims = 64,fc2_dims = 64, gamma = 0.99 , tau = 0.01, batch_size = 512, max_vel = 10) -> None:
+                fc1_dims = 640,fc2_dims = 640, gamma = 0.99 , tau = 0.01, batch_size = 512, max_vel = 10) -> None:
         
         #智能体的信息
         self.radius = radius
@@ -102,6 +102,7 @@ class circle_agent():
         self.observation = {}
         self.reward = 0.0
         self.done = False
+        self.target = False
         self.info = {}
         self.xy_vel = [vel_x, vel_y]
         self.linear_orientation = [linear_vel,  orientation_vel]
@@ -150,11 +151,11 @@ class circle_agent():
         
 
         if mode == "a":
-            mixed_action = (1 * single_action + 1.5 * noise) / 2.5
-        elif mode == "b":
             mixed_action = (1 * single_action + 1.0 * noise) / 2.0
+        elif mode == "b":
+            mixed_action = (1 * single_action + 0.7 * noise) / 1.7
         elif mode == "c":
-            mixed_action = (1 * single_action + 0.5 * noise) / 1.5
+            mixed_action = (1 * single_action + 0.45 * noise) / 1.45
         elif mode == "d":
             mixed_action = (1 * single_action + 0.2 * noise) / 1.2
         

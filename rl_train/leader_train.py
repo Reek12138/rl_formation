@@ -21,7 +21,7 @@ def multi_obs_to_state(multi_obs):
             state = np.concatenate([state, agent_obs])
     return state
 
-NUM_EPISODE = 3000
+NUM_EPISODE = 9000
 NUM_STEP = 2000
 MEMORY_SIZE = 100000
 BATCH_SIZE = 512
@@ -64,11 +64,11 @@ for episode_i in range(NUM_EPISODE):
         env.leader_agent.critic.load_checkpoint(f"{agent_path}" + f"leader_agent_critic_{scenario}.pth")
         env.leader_agent.target_critic.load_checkpoint(f"{agent_path}" + f"leader_agent_target_critic_{scenario}.pth")
     
-    if 500 <= episode_i < 1000 :
+    if NUM_EPISODE*(1/6) <= episode_i < NUM_EPISODE*(2/6) :
         MODE = "b"
-    elif 1000 <= episode_i < 2000:
+    elif NUM_EPISODE*(2/6) <= episode_i < NUM_EPISODE*(4/6):
         MODE = "c"
-    elif 2000<= episode_i:
+    elif NUM_EPISODE*(4/6)<= episode_i:
         MODE = "d"
 
     # print(multi_obs)
