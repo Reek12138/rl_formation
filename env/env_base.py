@@ -12,7 +12,7 @@ from .rvo_inter import rvo_inter
 
 
 
-LEADER_MAX_LINEAR_VEL = 10
+LEADER_MAX_LINEAR_VEL = 2
 
 class CustomEnv:
     metadata = {'render.modes': ['human']}
@@ -91,7 +91,11 @@ class CustomEnv:
         # for i,agent in enumerate(self.follower_agents.values()) :
         #     agent.set_position(self.leader_agent.pos_x + i*3 +3, self.leader_agent.pos_y + i*3 +3)
         
-        self.leader_agent.set_position(25,25)
+        # self.leader_agent.set_position(25,25)
+
+        self.leader_agent.set_position(10+np.random.rand()*self.width*0.8, 10+np.random.rand()*self.height*0.8)
+        self.leader_target_pos = [10+np.random.rand()*self.width*0.8, 10+np.random.rand()*self.height*0.8]
+
         self.leader_agent.set_xy_vel(0,0)
         self.leader_agent.set_linear_orientation(0,0)
         self.leader_agent.orientation = 0
