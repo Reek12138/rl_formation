@@ -185,6 +185,15 @@ for episode_i in range(NUM_EPISODE):
             av_loss += leader_loss
 
 
+            flag = os.path.exists(agent_path)
+            if not flag:
+                os.makedirs(agent_path)
+            # torch.save(env.leader_agent.actor.state_dict(), f"{agent_path}" + f"leader_agent_actor_{scenario}.pth")
+            env.leader_agent.actor.save_checkpoint(f"{agent_path}" + f"leader_agent_actor_{scenario}.pth")
+            env.leader_agent.target_actor.save_checkpoint(f"{agent_path}" + f"leader_agent_target_actor_{scenario}.pth")
+            env.leader_agent.critic.save_checkpoint(f"{agent_path}" + f"leader_agent_critic_{scenario}.pth")
+            env.leader_agent.target_critic.save_checkpoint(f"{agent_path}" + f"leader_agent_target_critic_{scenario}.pth")
+
 
 
 
@@ -254,14 +263,14 @@ for episode_i in range(NUM_EPISODE):
             print(f"Highest leader reward updated at episode{episode_i}: {round(leader_highest_reward ,2)}")
 
             
-            flag = os.path.exists(agent_path)
-            if not flag:
-                os.makedirs(agent_path)
-            # torch.save(env.leader_agent.actor.state_dict(), f"{agent_path}" + f"leader_agent_actor_{scenario}.pth")
-            env.leader_agent.actor.save_checkpoint(f"{agent_path}" + f"leader_agent_actor_{scenario}.pth")
-            env.leader_agent.target_actor.save_checkpoint(f"{agent_path}" + f"leader_agent_target_actor_{scenario}.pth")
-            env.leader_agent.critic.save_checkpoint(f"{agent_path}" + f"leader_agent_critic_{scenario}.pth")
-            env.leader_agent.target_critic.save_checkpoint(f"{agent_path}" + f"leader_agent_target_critic_{scenario}.pth")
+            # flag = os.path.exists(agent_path)
+            # if not flag:
+            #     os.makedirs(agent_path)
+            # # torch.save(env.leader_agent.actor.state_dict(), f"{agent_path}" + f"leader_agent_actor_{scenario}.pth")
+            # env.leader_agent.actor.save_checkpoint(f"{agent_path}" + f"leader_agent_actor_{scenario}.pth")
+            # env.leader_agent.target_actor.save_checkpoint(f"{agent_path}" + f"leader_agent_target_actor_{scenario}.pth")
+            # env.leader_agent.critic.save_checkpoint(f"{agent_path}" + f"leader_agent_critic_{scenario}.pth")
+            # env.leader_agent.target_critic.save_checkpoint(f"{agent_path}" + f"leader_agent_target_critic_{scenario}.pth")
 
         
         
