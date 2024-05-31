@@ -25,7 +25,7 @@ def multi_obs_to_state(multi_obs):
     return state
 
 NUM_EPISODE = 9000
-NUM_STEP = 2000
+NUM_STEP = 800
 MEMORY_SIZE = 100000
 BATCH_SIZE = 512
 TARGET_UPDATE_INTERVAL=100
@@ -39,7 +39,7 @@ MODE = "a"
 RENDER_FREQUENCE = 500
 RENDER_NUM_STEP = 100
 
-env = CustomEnv(delta=0.5)
+env = CustomEnv(delta=0.2)
 multi_obs, infos = env.reset()
 #这里要根据环境修改
 NUM_AGENT = env.num_agents
@@ -62,7 +62,7 @@ for episode_i in range(NUM_EPISODE):
     
 
     multi_obs, infos = env.reset()
-    if os.path.exists(agent_path) and episode_i > NUM_EPISODE*(4/6):
+    if os.path.exists(agent_path) and episode_i > NUM_EPISODE*(5/6):
         env.leader_agent.actor.load_checkpoint(f"{agent_path}" + f"leader_agent_actor_{scenario}.pth")
         env.leader_agent.target_actor.load_checkpoint(f"{agent_path}" + f"leader_agent_target_actor_{scenario}.pth")
         env.leader_agent.critic.load_checkpoint(f"{agent_path}" + f"leader_agent_critic_{scenario}.pth")
@@ -77,21 +77,22 @@ for episode_i in range(NUM_EPISODE):
 
     # print(multi_obs)
 
-    # leader_episode_reward = 0
+    # leader_step_reward = 0
     multi_done = {agent_name: False for agent_name in agent_name_list}
     multi_done["leader_agent"] = False
     # print(multi_done)
 
     
     if episode_i >0:
-        print("episode",episode_i,"========================HIGHEST REWARD : ", leader_highest_reward)
+        print(f"episode {episode_i} ======================== HIGHEST REWARD : {leader_highest_step_reward:.2f}")
+
     av_Q = 0
     max_Q = -inf
     av_loss = 0
     episode_reward = 0
     for step_i in range(NUM_STEP):
         if episode_i == 0 and step_i == 0:
-            leader_highest_reward = -inf
+            leader_highest_step_reward = -inf
 
         total_step = episode_i*NUM_STEP + step_i
 
@@ -108,13 +109,13 @@ for episode_i in range(NUM_EPISODE):
         
         episode_reward = multi_rewards["leader_agent"] + episode_reward*0.9
 
-        if step_i >= NUM_STEP -1:
-        # multi_done = {agnet_name :True for agnet_name in agent_name_list}
-            env.leader_agent.done = True
-            multi_done["leader_agent"] = env.leader_agent.done
-            for agent_id, agent in env.follower_agents.items():
-                agent.done = True
-                multi_done[agent_id] = agent.done
+        # if step_i >= NUM_STEP -1:
+        # # multi_done = {agnet_name :True for agnet_name in agent_name_list}
+        #     env.leader_agent.done = True
+        #     multi_done["leader_agent"] = env.leader_agent.done
+        #     for agent_id, agent in env.follower_agents.items():
+        #         agent.done = True
+        #         multi_done[agent_id] = agent.done
         
         env.leader_agent.replay_buffer.add_memo(multi_obs["leader_agent"],
                                                 multi_next_obs["leader_agent"],
@@ -133,7 +134,7 @@ for episode_i in range(NUM_EPISODE):
 
         # update critic and actor 
         if(total_step +1)% TARGET_UPDATE_INTERVAL == 0:
-        # if leader_episode_reward > leader_highest_reward:
+        # if leader_step_reward > leader_highest_step_reward:
         
 
             #leader_agent update
@@ -168,7 +169,7 @@ for episode_i in range(NUM_EPISODE):
             leader_loss.backward()
             env.leader_agent.critic.optimizer.step()
 
-            if(total_step+1)/2 ==0:
+            if(total_step+1)/5 ==0:
                 actor_grad, _ = env.leader_agent.critic(leader_batch_states_tensor, env.leader_agent.actor(leader_batch_states_tensor))
                 actor_grad = -actor_grad.mean()
                 env.leader_agent.actor.optimizer.zero_grad()
@@ -242,25 +243,26 @@ for episode_i in range(NUM_EPISODE):
             
 
         multi_obs = multi_next_obs
-        leader_episode_reward = multi_rewards["leader_agent"]
+        leader_step_reward = multi_rewards["leader_agent"]
 
         if step_i % 100 == 0:
-            print("episode",episode_i,"step",step_i, "      REWARD : ",leader_episode_reward, "    EPISODE_REWARD : ", episode_reward)
+            print(f"episode {episode_i}  step {step_i}      REWARD : {leader_step_reward:.2f}     EPISODE_REWARD :  {episode_reward:.2f}")
 
         if multi_done["leader_agent"]:
+            print(f"xxxxxxxxxxxxxxxxxxxxxxxx  COLLISION  xxxxxxxxxxxxxxxxxx  reward :  {leader_step_reward:.2f}")
             break
 
         if infos["leader_agent"]:
-            print("**************REACH GOAL****************")
+            print(f"************************  REACH GOAL  ******************** reward :  {leader_step_reward:.2f}")
             break
 
         # 4. save the agents' models
         
         # if episode_i == 0:
-        #     leader_highest_reward = leader_episode_reward
-        if leader_episode_reward > leader_highest_reward:
-            leader_highest_reward = leader_episode_reward
-            print(f"Highest leader reward updated at episode{episode_i}: {round(leader_highest_reward ,2)}")
+        #     leader_highest_step_reward = leader_step_reward
+        if leader_step_reward > leader_highest_step_reward:
+            leader_highest_step_reward = leader_step_reward
+            print(f"Highest leader reward updated at episode{episode_i}: {round(leader_highest_step_reward ,2)}")
 
             
             # flag = os.path.exists(agent_path)
@@ -282,11 +284,11 @@ for episode_i in range(NUM_EPISODE):
 
     # 3. render the env
     if (episode_i + 1) % RENDER_FREQUENCE == 0:
-        env = CustomEnv(delta=0.5)
+        env = CustomEnv(delta=0.2)
         env.leader_agent.actor.load_checkpoint(f"{agent_path}" + f"leader_agent_actor_{scenario}.pth")
         for test_epi_i in range(1):
             multi_obs, infos = env.reset()
-            print("rendering episode ", test_epi_i," ==========================")
+            print(f"rendering episode  {test_epi_i} ==========================")
             for step_i in range(RENDER_NUM_STEP):
                 env.render(display_time=0.1)
 
@@ -312,11 +314,11 @@ for episode_i in range(NUM_EPISODE):
         # # 4. save the agents' models
         # if episode_i == 0:
             
-        #     leader_highest_reward = leader_episode_reward
+        #     leader_highest_step_reward = leader_step_reward
     
-        # if leader_episode_reward > leader_highest_reward:
-        #     leader_highest_reward = leader_episode_reward
-        #     print(f"Highest leader reward updated at episode{episode_i}: {round(leader_highest_reward / 512 ,2)}")
+        # if leader_step_reward > leader_highest_step_reward:
+        #     leader_highest_step_reward = leader_step_reward
+        #     print(f"Highest leader reward updated at episode{episode_i}: {round(leader_highest_step_reward / 512 ,2)}")
 
             
         #     flag = os.path.exists(agent_path)
