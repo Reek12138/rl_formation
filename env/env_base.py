@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-from pettingzoo import AECEnv, ParallelEnv
-from pettingzoo.utils import agent_selector
-from gym.spaces import Box, Discrete
+# from pettingzoo import AECEnv, ParallelEnv
+# from pettingzoo.utils import agent_selector
+# from gym.spaces import Box, Discrete
 import numpy as np
-from pettingzoo.mpe import simple_adversary_v3
+# from pettingzoo.mpe import simple_adversary_v3
 from .obstacle import obstacle
 from .circle_agent import circle_agent
 import matplotlib.pyplot as plt
@@ -340,7 +340,7 @@ class CustomEnv:
             self.ax.plot(obs.pos_x, obs.pos_y, 'o', color='red', markersize=self.obs_radius)
 
         # 绘制目标
-        self.ax.plot(self.leader_target_pos[0], self.leader_target_pos[1], 'o', color='green', markersize=8)
+        self.ax.plot(self.leader_target_pos[0], self.leader_target_pos[1], 'o', color='green', markersize=np.pi*(10)**2)
 
         plt.pause(self.display_time)  # 暂停以更新图形
         # plt.show()
@@ -532,5 +532,7 @@ class CustomEnv:
         
         # 计算角度，使用arctan2来得到正确的象限
         angle = np.arctan2(relative_pos[1], relative_pos[0])
+        if angle < 0:
+            angle += 2*np.pi
         
         return distance, angle

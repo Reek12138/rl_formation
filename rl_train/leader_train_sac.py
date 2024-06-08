@@ -18,11 +18,14 @@ from env_sac.circle_agent_sac import circle_agent, ReplayBuffer
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(f"using device:{device}")
 
-NUM_EPISODE = 3000
-NUM_STEP = 500
+NUM_EPISODE = 90000
+NUM_STEP = 3000
 MEMORY_SIZE = 100000
 BATCH_SIZE = 512
-TARGET_UPDATE_INTERVAL= NUM_STEP *4
+TARGET_UPDATE_INTERVAL= 20
+RENDER_FREQUENCE = 500
+RENDER_NUM_EPISODE = 20
+RENDER_NUM_STEP = 1000
 
 
 env = CustomEnv(delta=0.1)
@@ -31,58 +34,167 @@ env.reset()
 scenario = "leader_sac"
 current_path = os.path.dirname(os.path.realpath(__file__))
 agent_path = current_path + "/leader_model/"
+better_path = current_path + "/leader_model/better/"
 
 timestamp = time.strftime("%Y%m%d%H%M%S")
 
 # main train loop
-episode_highest_reward = -inf
+last_episode_reward = -inf
+highest_num_reach_goal = 0
 
 for episode_i in range(NUM_EPISODE):
 
     state, done = env.reset()
-    target_distance = np.linalg.norm(np.array(env.leader_agent.pos), np.array(env.leader_target_pos))
-
+    # print(done)
+    
+    target_distance = np.linalg.norm(np.array(env.leader_agent.pos) - np.array(env.leader_target_pos))
+    # print(env.leader_target_pos, env.leader_agent.pos)
     if os.path.exists(agent_path) and episode_i > NUM_EPISODE*(5/6):
         env.leader_agent.sac_network.load_model(agent_path, scenario)
 
     if episode_i > 0:
-        print(f"episode {episode_i} =============== HIGHEST REWARD : {leader_highest_step_reward:.2f} ========================")
+        print(f"episode {episode_i}   ===========    LAST EPISODE REWARD : {last_episode_reward:.2f} STEP REWARD : {leader_highest_step_reward:.2f}                ")
     
     episode_reward = 0
     reward_list =[]
+    leader_highest_step_reward = -inf
     for step_i in range(NUM_STEP):
-        while not done:
-            if episode_i and step_i == 0 :
-                leader_highest_step_reward = -inf
-            
-            total_step = episode_i *NUM_STEP +step_i
+        # while not done:
+        last_distance = np.linalg.norm(np.array(env.leader_agent.pos) - np.array(env.leader_target_pos))
+        if episode_i == 0 and step_i == 0 :
+            leader_highest_step_reward = -inf
+        
+        total_step = episode_i *NUM_STEP +step_i
+        # print(state)
+        leader_action = env.leader_agent.sac_network.take_action(state)
+        # print(leader_action)
 
-            leader_action = env.leader_agent.sac_network.take_action(state)
+        noise = np.random.normal(0, 0.2, size=leader_action.shape)
 
-            next_state, reward, done, target = env.step(action=leader_action,
-                                                        num_step=total_step,
-                                                        target_distance=target_distance)
-            episode_reward = episode_reward * 0.9 + reward
-            # 保存每个回合return
-            reward_list.append(episode_reward)
-            env.leader_agent.replay_buffer.add(state=state, action=leader_action, reward=reward, next_state=next_state,done=done)
-            
-            state = next_state
-            
-            current_memo_size = min(MEMORY_SIZE, total_step)
-            batch_flag = False   
-            if current_memo_size >= BATCH_SIZE*5:    
-                batch_flag = True
-            else:
-                batch_flag = False
-                continue
-            if(total_step +1)% TARGET_UPDATE_INTERVAL == 0 and batch_flag == True:
+        noisy_action = leader_action + noise
+        noisy_action = np.clip(noisy_action, -1, 1)
+        action_in =[noisy_action[0] + 1,
+                    noisy_action[1] * (np.pi/2)]
+        
+        last_obs_distance = {}
+        for obs_id, obs in env.obstacles.items():
+            last_obs_distance[obs_id] = np.linalg.norm(np.array(env.leader_agent.pos) - np.array([obs.pos_x, obs.pos_y]))
+        # print(leader_action_noise)
+
+        next_state, reward, done, target = env.step(action=noisy_action,
+                                                    num_step=total_step,
+                                                    last_distance=last_distance,
+                                                    last_obs_distacnce=last_obs_distance)
+        
+        if reward > leader_highest_step_reward:
+            # print(f"highest step reward update {reward:.2f} at episode {episode_i} step  {step_i}")
+            leader_highest_step_reward = reward
+
+        episode_reward = episode_reward * 0.9 + reward
+        # 保存每个回合return
+        reward_list.append(episode_reward)
+        # print (state, leader_action)
+        if step_i == NUM_STEP:
+            done = True
+
+        env.leader_agent.replay_buffer.add(state=state, action=leader_action, reward=reward, next_state=next_state,done=done)
+        
+        state = next_state
+        
+        current_memo_size = min(MEMORY_SIZE, total_step)
+        batch_flag = current_memo_size >= BATCH_SIZE * 5
+
+        if(total_step +1)% TARGET_UPDATE_INTERVAL == 0 and batch_flag == True:
+            if env.leader_agent.replay_buffer.size() >= BATCH_SIZE:
                 s, a, r, ns, d = env.leader_agent.replay_buffer.sample(batch_size=BATCH_SIZE)
                 transition_dict = {'states': s,
-                               'actions': a,
-                               'rewards': r,
-                               'next_states': ns,
-                               'dones': d}
+                                'actions': a,
+                                'rewards': r,
+                                'next_states': ns,
+                                'dones': d}
                 env.leader_agent.sac_network.update(transition_dict=transition_dict)
 
+            if not os.path.exists(agent_path):
+                os.makedirs(agent_path)
+            env.leader_agent.sac_network.save_model(agent_path, scenario)
+
+        if env.leader_agent.done and not env.leader_agent.target:
+            if env.leader_agent.pos[0] < env.width * 0.1 or (env.width - env.leader_agent.pos[0]) < env.width * 0.1 or env.leader_agent.pos[1] < env.height * 0.1 or (env.height - env.leader_agent.pos[1]) < env.height * 0.1:
+                print(f"\033[91mxxxxxxxxxxxxxxxxxx  COLLISION SIDE xxxxxxxxxxxxxxxxxxx step{step_i} episode_reward : {episode_reward:.2f}\033[0m")
+                # print(f"xxxxxxxxxxxxxxxxxx  COLLISION SIDE xxxxxxxxxxxxxxxxxxx step{step_i} reward : {reward}")
+            else :
+                print(f"\033[93mxxxxxxxxxxxxxxxxxx  COLLISION OBSTACLE xxxxxxxxxxxxxxxxxxx step{step_i} reward : {episode_reward:.2f}\033[0m")
+            break
+        elif env.leader_agent.done and env.leader_agent.target:
+            print(f"\033[92m******************** REACH GOAL ********************step{step_i} reward : {episode_reward:.2f}\033[0m")
+            break
+
+
+    # if episode_reward > episode_highest_reward:
+    #     print(f"episode highest reward update {episode_reward} at episode{episode_i}")
+    #     episode_highest_reward = episode_reward
+    last_episode_reward = episode_reward
+
+
+    if episode_i > 0 and episode_i % RENDER_FREQUENCE == 0:
+        env = CustomEnv(delta=0.1)
+        num_reach_goal = 0
+        num_collision_side = 0
+        num_collision_obstacle = 0
+        for test_episode_i in range (RENDER_NUM_EPISODE):
             
+
+            env.leader_agent.sac_network.load_model(agent_path, scenario)
+            target_distance = np.linalg.norm(np.array(env.leader_agent.pos) - np.array(env.leader_target_pos))
+
+            state, done = env.reset()
+            print("======================验证中=========================")
+
+            for test_step_i in range (RENDER_NUM_STEP):
+                
+                # env.render(display_time=0.1)
+                leader_action = env.leader_agent.sac_network.take_action(state)
+
+                noise = np.random.normal(0, 0.2, size=leader_action.shape)
+
+                noisy_action = leader_action + noise
+                noisy_action = np.clip(noisy_action, -1, 1)
+                action_in =[noisy_action[0] + 1,
+                            noisy_action[1] * (np.pi/2)]
+
+                
+                # print("leader_action : ",leader_action)
+                last_obs_distance = {}
+                for obs_id, obs in env.obstacles.items():
+                    last_obs_distance[obs_id] = np.linalg.norm(np.array(env.leader_agent.pos) - np.array([obs.pos_x, obs.pos_y]))
+                    
+                next_state, reward, done, target = env.step(action=noisy_action,
+                                                            num_step=test_step_i,
+                                                            last_distance=target_distance,
+                                                            last_obs_distacnce=last_obs_distance)
+                
+                state = next_state
+
+                if env.leader_agent.done and not env.leader_agent.target:
+                    if env.leader_agent.pos[0] < env.width * 0.1 or (env.width - env.leader_agent.pos[0]) < env.width * 0.1 or env.leader_agent.pos[1] < env.height * 0.1 or (env.height - env.leader_agent.pos[1]) < env.height * 0.1:
+                        num_collision_side += 1
+                        print(f"\033[91mxxxxxxxxxxxxxxxxxx  COLLISION SIDE xxxxxxxxxxxxxxxxxxx step{test_step_i} episode_reward : {episode_reward:.2f}\033[0m")
+                    else :
+                        num_collision_obstacle+=1
+                        print(f"\033[93mxxxxxxxxxxxxxxxxxx  COLLISION OBSTACLE xxxxxxxxxxxxxxxxxxx step{test_step_i} reward : {episode_reward:.2f}\033[0m")
+                    break
+                elif env.leader_agent.done and env.leader_agent.target:
+                    num_reach_goal+=1
+                    print(f"\033[92m******************** REACH GOAL ********************step{test_step_i} reward : {episode_reward:.2f}\033[0m")
+                    # print(f"******************** REACH GOAL ********************step{test_step_i} reward : {reward}")
+                    break
+
+            # env.render_close()
+
+        print(f"\033[95mreach goal : {num_reach_goal}, collision_side : {num_collision_side}, collision obstacle : {num_collision_obstacle}\033[0m")
+        if num_reach_goal > highest_num_reach_goal:
+            if not os.path.exists(better_path):
+                os.makedirs(better_path)
+            env.leader_agent.sac_network.save_model(better_path, scenario)
+
+            highest_num_reach_goal = num_reach_goal
