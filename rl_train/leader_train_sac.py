@@ -167,7 +167,7 @@ for episode_i in range(NUM_EPISODE):
                 last_obs_distance = {}
                 for obs_id, obs in env.obstacles.items():
                     last_obs_distance[obs_id] = np.linalg.norm(np.array(env.leader_agent.pos) - np.array([obs.pos_x, obs.pos_y]))
-                    
+
                 next_state, reward, done, target = env.step(action=noisy_action,
                                                             num_step=test_step_i,
                                                             last_distance=target_distance,
@@ -192,7 +192,7 @@ for episode_i in range(NUM_EPISODE):
             # env.render_close()
 
         print(f"\033[95mreach goal : {num_reach_goal}, collision_side : {num_collision_side}, collision obstacle : {num_collision_obstacle}\033[0m")
-        if num_reach_goal > highest_num_reach_goal:
+        if num_reach_goal >= highest_num_reach_goal:
             if not os.path.exists(better_path):
                 os.makedirs(better_path)
             env.leader_agent.sac_network.save_model(better_path, scenario)

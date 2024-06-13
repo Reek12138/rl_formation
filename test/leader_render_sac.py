@@ -8,13 +8,13 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
-from env_sac.env_sac import CustomEnv
-from env_sac.circle_agent_sac import circle_agent, ReplayBuffer
+from env_sac_vo.env_sac import CustomEnv
+from env_sac_vo.circle_agent_sac import circle_agent, ReplayBuffer
 
 RENDER_EPISODE_NUM = 5
 RENDER_NUM_STEP = 500
 
-scenario = "leader_sac"
+scenario = "leader_sac_vo"
 current_path = os.path.dirname(os.path.realpath(__file__))
 agent_path = current_path + "/leader_model/better/" 
 
