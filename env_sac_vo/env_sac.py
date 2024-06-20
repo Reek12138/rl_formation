@@ -28,7 +28,7 @@ class CustomEnv:
         self.obs_radius = obs_radius
         self.target_radius = target_radius
         self.agent_radius = agent_radius
-        self.obs_delta = 8
+        self.obs_delta =10
         self.fig = None
         self.ax = None
         
@@ -38,7 +38,7 @@ class CustomEnv:
 
         # 生成circle_agent实例列表
         self.leader_agent = circle_agent(self, pos=[25, 25], vel=[0,0], orientation=0, memo_size=memo_size,
-                                         state_dim=7 + self.num_obstacles * 3,
+                                         state_dim=11 + self.num_obstacles * 5,
                                          action_dim=2,
                                          alpha=1e-4,
                                          beta=1e-4,
@@ -153,7 +153,7 @@ class CustomEnv:
 
         target_distance =  np.linalg.norm(np.array(self.leader_target_pos) - np.array(self.leader_agent.pos))
 
-        self.leader_agent.set_vel(0,0)
+        self.leader_agent.set_vel(0)
         self.leader_agent.orientation = np.random.rand()*2*np.pi
         self.leader_agent.done = False
         self.leader_agent.target = False
@@ -205,6 +205,7 @@ class CustomEnv:
             agent.set_position(x, y)  
             
             agent.orientation = new_orientation
+            agent.vel = linear_vel
         else:
             agent.done = True
 
@@ -227,6 +228,9 @@ class CustomEnv:
         self_pos_2 = [agent.orientation / (2*np.pi), ((action[0] +1) * cos(agent.orientation))/2, ((action[0] +1) * sin(agent.orientation))/2]
         target_pos_ = [self.leader_target_pos[0] / self.width, self.leader_target_pos[1] / self.height]
 
+        side_pos = [agent.pos[0] / self.width, (self.width - agent.pos[0]) / self.width, agent.pos[1] / self.height, (self.height - agent.pos[1]) / self.height]
+        target_pos_2 = [(self.leader_target_pos[0]) - agent.pos[0] / self.width, (self.leader_target_pos[1] - agent.pos[1]) / self.height, _dis / self.width, (_angle - agent.orientation) / (2 * np.pi)]
+
         
         obs_distance_angle = []
         obs_pos_vel = []
@@ -235,22 +239,11 @@ class CustomEnv:
             obs_pos = [obs.pos_x, obs.pos_y]
             _obs_distance, _obs_angle = CustomEnv.calculate_relative_distance_and_angle(agent.pos, obs_pos)
 
-            # obs_dis_threadhold = self.obs_delta
-            # if _obs_distance < obs_dis_threadhold:
-            #     obs_distance = _obs_distance/obs_dis_threadhold
-            #     obs_angle =abs(_obs_angle - agent.orientation)/(2*np.pi)
-            #     # print(f"obs_distance : { obs_distance}, obs_angle : {obs_angle}")
-            # else :
-            #     obs_distance = 1
-            #     obs_angle = 1
-
-
             
             # obs_distance_angle.extend([obs_distance, obs_angle])
-            vo_flag = False
             if _obs_distance <= self.obs_delta:
-                vx = agent.orientation * cos(agent.orientation)
-                vy = agent.orientation * sin(agent.orientation)
+                vx = agent.vel * cos(agent.orientation)
+                vy = agent.vel * sin(agent.orientation)
                 robot_state = [agent.pos[0], agent.pos[1], vx, vy, self.agent_radius]
                 nei_state_list = []
                 obs_cir_list = [ [obs.pos_x, obs.pos_y, obs.xy_vel[0], obs.xy_vel[1], self.obs_radius]]
@@ -261,12 +254,21 @@ class CustomEnv:
                                                                                                                                                         obs_cir_list=obs_cir_list,
                                                                                                                                                         obs_line_list=obs_line_list,
                                                                                                                                                         action=action)
-        # for obs in self.obstacles.values():
-            px = obs.pos_x / self.width
-            py = obs.pos_y / self.height
-            vx = 0
-            vy = 0
-            obs_pos_vel.extend([px, py, vo_flag])
+                # print("vo_flag :" ,vo_flag)
+                px = (obs.pos_x - agent.pos[0]) / self.obs_delta
+                py = (obs.pos_y - agent.pos[1])/ self.obs_delta
+                vx = 0
+                vy = 0
+                _obs_distance_ = _obs_distance / self.obs_delta
+            
+            else:
+                vo_flag = False
+                px = 1
+                py = 1
+                _obs_distance_ = 1
+            
+            obs_dis_angle = _obs_angle - agent.orientation
+            obs_pos_vel.extend([px, py, _obs_distance_, obs_dis_angle / (2*np.pi), vo_flag])
      
         observation2 = np.array(
             self_pos_ +
@@ -276,9 +278,16 @@ class CustomEnv:
             
 
         )
+        observation1 = np.array(
+            side_pos + 
+            target_pos_2 +
+            obs_pos_vel +
+            # self_pos_ +
+            self_pos_2
+        )
         
 
-        return observation2
+        return observation1
 
     
     def _find_closest_obstacle(self, agent_pos):
@@ -341,10 +350,10 @@ class CustomEnv:
         reward6 = self._caculate_time_reward(t)
         
         # reward = reward1[2] + reward2
-        if min_dis + self.obs_radius <= self.obs_delta :
-            reward = reward2 + reward3 + reward4 + reward5
-        else:
-            reward = reward2 + reward4 + reward5 
+        # if min_dis + self.obs_radius <= self.obs_delta :
+        reward = reward2 + reward3 + reward4 + reward5
+        # else:
+        #     reward = reward2 + reward4 + reward5 
         # if reward1 != 0:
         #     print(f"vo_reward : {reward1}")
         # if t % 10 == 0:
@@ -353,8 +362,8 @@ class CustomEnv:
 
    
     def _caculate_leader_vo_reward(self, agent, target, agent_action):
-        vx = agent.orientation * cos(agent.orientation)
-        vy = agent.orientation * sin(agent.orientation)
+        vx = agent.vel * cos(agent.orientation)
+        vy = agent.vel * sin(agent.orientation)
         robot_state = [agent.pos[0], agent.pos[1], vx, vy, self.agent_radius]
         nei_state_list = []
         obs_cir_list = []
@@ -414,7 +423,7 @@ class CustomEnv:
             if vo_flag:
                 return 0
             else:
-                return reward *2
+                return reward *2.5
         # if np.isnan(reward) or np.isinf(reward):
         #     print(f"NaN or Inf detected in reward calculation! reward: {reward}, dis: {dis}, action: {action}")
         #     reward = -100  # 或其他合理的默认值
@@ -422,13 +431,16 @@ class CustomEnv:
             
 
     def _caculate_obstacle_reward(self, agent_id, agent, last_obs_distance):
+        if agent.done and not agent.target:
+                    return -200
+        
         reward = 0
         
         for obs_id, obs in self.obstacles.items():
             dis, angle = CustomEnv.calculate_relative_distance_and_angle(agent.pos, [obs.pos_x, obs.pos_y])
             if dis <= self.obs_delta:
-                vx = agent.orientation * cos(agent.orientation)
-                vy = agent.orientation * sin(agent.orientation)
+                vx = agent.vel * cos(agent.orientation)
+                vy = agent.vel * sin(agent.orientation)
                 robot_state = [agent.pos[0], agent.pos[1], vx, vy, self.agent_radius]
                 nei_state_list = []
                 obs_cir_list = [ [obs.pos_x, obs.pos_y, obs.xy_vel[0], obs.xy_vel[1], self.obs_radius]]
@@ -440,28 +452,32 @@ class CustomEnv:
                                                                                                                                                         obs_line_list=obs_line_list,
                                                                                                                                                         action=action)
                 if vo_flag:
-                    delta = 1.5
+                    delta = 2
+                    x = -(1/dis)
+                    x = 0
+
                 else:
-                    delta = 1
+                    delta = 0.5
+                    x = 0
 
                 d_dis = dis - last_obs_distance[obs_id]
-                if dis < 5:
-                    x = -(1/dis)
-                else:
-                    x = 0
-                if agent.done and not agent.target:
-                    return -200
+
+                # if dis < 5:
+                #     x = -(1/dis)
+                # else:
+                #     x = 0
+                
                         # print( f"d_dis : {d_dis}, x : {x}")
                     
-                reward += d_dis * 80 * delta+ x
+                reward += d_dis * 80 * delta+ x *20
             
         return  reward 
     
     def _caculate_velocity_reward(self, agent, action, vo_flag):
         if vo_flag:
-            return ((action[0]+1) + abs(action[1])/2) 
+            return ((action[0]+1) + abs(action[1])/2) *5
         else:
-            return ((action[0]+1) - abs(action[1])/2 ) 
+            return ((action[0]+1) - abs(action[1])/3 ) *5
         
 
     def _caculate_side_reward(self, agent):

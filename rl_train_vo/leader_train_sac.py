@@ -42,6 +42,7 @@ timestamp = time.strftime("%Y%m%d%H%M%S")
 last_episode_reward = -inf
 highest_num_reach_goal = 0
 
+env.leader_agent.replay_buffer.clear()
 for episode_i in range(NUM_EPISODE):
 
     state, done = env.reset()
