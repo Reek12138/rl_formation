@@ -229,7 +229,7 @@ class CustomEnv:
         target_pos_ = [self.leader_target_pos[0] / self.width, self.leader_target_pos[1] / self.height]
 
         side_pos = [agent.pos[0] / self.width, (self.width - agent.pos[0]) / self.width, agent.pos[1] / self.height, (self.height - agent.pos[1]) / self.height]
-        target_pos_2 = [(self.leader_target_pos[0]) - agent.pos[0] / self.width, (self.leader_target_pos[1] - agent.pos[1]) / self.height, _dis / self.width, (_angle - agent.orientation) / (2 * np.pi)]
+        target_pos_2 = [(self.leader_target_pos[0]) - agent.pos[0] / self.width, (self.leader_target_pos[1] - agent.pos[1]) / self.height, _dis / (self.width * 1.414), (_angle - agent.orientation) / (2 * np.pi)]
 
         
         obs_distance_angle = []
@@ -259,7 +259,7 @@ class CustomEnv:
                 py = (obs.pos_y - agent.pos[1])/ self.obs_delta
                 vx = 0
                 vy = 0
-                _obs_distance_ = _obs_distance / self.obs_delta
+                _obs_distance_ = _obs_distance / (self.obs_delta * 1.415)
             
             else:
                 vo_flag = False
@@ -267,8 +267,9 @@ class CustomEnv:
                 py = 1
                 _obs_distance_ = 1
             
-            obs_dis_angle = _obs_angle - agent.orientation
+            obs_dis_angle = (_obs_angle - agent.orientation)
             obs_pos_vel.extend([px, py, _obs_distance_, obs_dis_angle / (2*np.pi), vo_flag])
+            # obs_pos_vel.extend([px, py, vo_flag])
      
         observation2 = np.array(
             self_pos_ +
@@ -357,7 +358,7 @@ class CustomEnv:
         # if reward1 != 0:
         #     print(f"vo_reward : {reward1}")
         # if t % 10 == 0:
-        #     print(f"vo_flag : {vo_flag}, target_reward : {reward2:.2f}, obs_reward : {reward3:.2f}, velocity_reward : { reward4:.2f}, side_reward:{reward5:.2f}, action :{action}")
+            # print(f"vo_flag : {vo_flag}, target_reward : {reward2:.2f}, obs_reward : {reward3:.2f}, velocity_reward : { reward4:.2f}, side_reward:{reward5:.2f}, action :{action}")
         return reward
 
    
@@ -403,10 +404,10 @@ class CustomEnv:
 
         
         if check_agent.done and check_agent.target:
-            return 200
+            return 300
         
         else :
-            dis_ = -(dis - last_distance) * 40
+            dis_ = -(dis - last_distance) 
 
             if dis > self.width * 0.3 :
                 dis_reward = 0
@@ -423,7 +424,7 @@ class CustomEnv:
             if vo_flag:
                 return 0
             else:
-                return reward *2.5
+                return reward *350
         # if np.isnan(reward) or np.isinf(reward):
         #     print(f"NaN or Inf detected in reward calculation! reward: {reward}, dis: {dis}, action: {action}")
         #     reward = -100  # 或其他合理的默认值
@@ -438,7 +439,7 @@ class CustomEnv:
         
         for obs_id, obs in self.obstacles.items():
             dis, angle = CustomEnv.calculate_relative_distance_and_angle(agent.pos, [obs.pos_x, obs.pos_y])
-            if dis <= self.obs_delta:
+            if dis <= self.obs_delta and abs(angle - agent.orientation)<=np.pi:
                 vx = agent.vel * cos(agent.orientation)
                 vy = agent.vel * sin(agent.orientation)
                 robot_state = [agent.pos[0], agent.pos[1], vx, vy, self.agent_radius]
@@ -453,14 +454,21 @@ class CustomEnv:
                                                                                                                                                         action=action)
                 if vo_flag:
                     delta = 2
-                    x = -(1/dis)
+                    # x = -(1/dis)
                     x = 0
+                    # x = (dis - self.obs_delta)
 
                 else:
                     delta = 0.5
                     x = 0
 
                 d_dis = dis - last_obs_distance[obs_id]
+
+                if dis <= self.obs_delta * 0.6:
+                    x = -(1/dis)
+                else:
+                    x = 0
+
 
                 # if dis < 5:
                 #     x = -(1/dis)
@@ -469,15 +477,16 @@ class CustomEnv:
                 
                         # print( f"d_dis : {d_dis}, x : {x}")
                     
-                reward += d_dis * 80 * delta+ x *20
+                reward += d_dis * 500 * delta+ x * 15
+                # reward +=  x * 50
             
         return  reward 
     
     def _caculate_velocity_reward(self, agent, action, vo_flag):
         if vo_flag:
-            return ((action[0]+1) + abs(action[1])/2) *5
+            return ((action[0] + 1) + abs(action[1])/2) *5
         else:
-            return ((action[0]+1) - abs(action[1])/3 ) *5
+            return ((action[0] + 1) - abs(action[1])/2 ) *5
         
 
     def _caculate_side_reward(self, agent):
