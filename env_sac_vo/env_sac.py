@@ -404,7 +404,7 @@ class CustomEnv:
 
         
         if check_agent.done and check_agent.target:
-            return 300
+            return 400
         
         else :
             dis_ = -(dis - last_distance) 
@@ -424,7 +424,7 @@ class CustomEnv:
             if vo_flag:
                 return 0
             else:
-                return reward *350
+                return reward *400
         # if np.isnan(reward) or np.isinf(reward):
         #     print(f"NaN or Inf detected in reward calculation! reward: {reward}, dis: {dis}, action: {action}")
         #     reward = -100  # 或其他合理的默认值
