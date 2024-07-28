@@ -433,13 +433,13 @@ class CustomEnv:
 
     def _caculate_obstacle_reward(self, agent_id, agent, last_obs_distance):
         if agent.done and not agent.target:
-                    return -200
+                    return -500
         
         reward = 0
         
         for obs_id, obs in self.obstacles.items():
             dis, angle = CustomEnv.calculate_relative_distance_and_angle(agent.pos, [obs.pos_x, obs.pos_y])
-            if dis <= self.obs_delta and abs(angle - agent.orientation)<=np.pi:
+            if dis <= self.obs_delta and abs(angle - agent.orientation)<=np.pi/2:
                 vx = agent.vel * cos(agent.orientation)
                 vy = agent.vel * sin(agent.orientation)
                 robot_state = [agent.pos[0], agent.pos[1], vx, vy, self.agent_radius]
@@ -464,7 +464,7 @@ class CustomEnv:
 
                 d_dis = dis - last_obs_distance[obs_id]
 
-                if dis <= self.obs_delta * 0.6:
+                if dis <= self.obs_delta :
                     x = -(1/dis)
                 else:
                     x = 0
@@ -477,7 +477,7 @@ class CustomEnv:
                 
                         # print( f"d_dis : {d_dis}, x : {x}")
                     
-                reward += d_dis * 500 * delta+ x * 15
+                reward += d_dis * 500 * delta+ x * 60
                 # reward +=  x * 50
             
         return  reward 
