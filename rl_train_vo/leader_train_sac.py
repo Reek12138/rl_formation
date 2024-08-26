@@ -18,13 +18,13 @@ from env_sac_vo.circle_agent_sac import circle_agent, ReplayBuffer
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(f"using device:{device}")
 
-NUM_EPISODE = 90000
+NUM_EPISODE = 90002
 NUM_STEP = 3000
 MEMORY_SIZE = 100000
 BATCH_SIZE = 512
 TARGET_UPDATE_INTERVAL= 20
 RENDER_FREQUENCE = 500
-RENDER_NUM_EPISODE = 50
+RENDER_NUM_EPISODE = 100
 RENDER_NUM_STEP = 1000
 
 
