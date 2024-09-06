@@ -1,4 +1,6 @@
 计算vo的时候把障碍物的半径*1.2   
+测试1000次结果 测试结果为：到达目标 907 次， 碰撞边缘 1 次，碰撞障碍 56 次，未到达目标 36 次      
+
 
 
 def _caculate_leader_vo_reward(self, agent, target, agent_action):
@@ -30,7 +32,7 @@ def _caculate_leader_vo_reward(self, agent, target, agent_action):
             reward = 0
         return vo_flag, reward *2, min_dis
 
-        
+
 def _caculate_target_reward(self, check_agent_id, check_agent, formation_target, action, t, last_distance, vo_flag):
         """和编队目标之间的距离"""
         reward = 0

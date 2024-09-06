@@ -91,28 +91,6 @@ class CustomEnv:
         self._check_obs()
         self.reset()
 
-    
-    # def _check_obs(self):
-    #     """ 确保障碍物不重复 """
-    #     obstacles_keys = list(self.obstacles.keys())
-    #     obstacles_list = list(self.obstacles.values())
-
-    #     # 仅检查随机位置的障碍物
-    #     random_obstacles = obstacles_list[9:]  # 假设前9个障碍物是固定的
-    #     fixed_obstacles = obstacles_list[:9]
-
-    #     for i, obs in enumerate(random_obstacles):
-    #         for j in range(i + 1, len(random_obstacles)):
-    #             obs2 = random_obstacles[j]
-    #             dis = np.linalg.norm(obs.position() - obs2.position())
-    #             dis2 = np.linalg.norm(np.array(self.leader_target_pos) - obs2.position())
-    #             while dis < 2 * self.obs_radius + self.agent_radius + self.safe_theta or dis2 < self.obs_radius + self.target_radius + self.agent_radius + self.safe_theta:
-    #                 key = obstacles_keys[9 + j]  # 索引偏移，确保获取随机障碍物的键
-    #                 self.obstacles[key].pos_x = np.random.rand() * self.width * 0.7 + self.width * 0.15
-    #                 self.obstacles[key].pos_y = np.random.rand() * self.height * 0.7 + self.height * 0.15
-    #                 dis = np.linalg.norm(obs.position() - self.obstacles[key].position())
-    #                 dis2 = np.linalg.norm(np.array(self.leader_target_pos) - self.obstacles[key].position())
-    
     def _check_obs(self):
         """ 确保障碍物不重复 """
         obstacles_keys = list(self.obstacles.keys())
@@ -469,8 +447,8 @@ class CustomEnv:
         else:
             reward = 0
         return vo_flag, reward *2, min_dis
-    
-    
+
+
     def _caculate_target_reward(self, check_agent_id, check_agent, formation_target, action, t, last_distance, vo_flag):
         """和编队目标之间的距离"""
         reward = 0
@@ -502,7 +480,7 @@ class CustomEnv:
             # print((1- (dis_ / 100))*2)
             if vo_flag:
                 # return 0
-                return reward *120
+                return reward *100
 
             else:
                 return reward *500
@@ -534,14 +512,22 @@ class CustomEnv:
                                                                                                                                                         obs_line_list=obs_line_list,
                                                                                                                                                         action=action)
                 if vo_flag:
-                    delta = 750
-                    x = 60
+                    delta = 500
+                    x = 100
                     # x = 0
                     # x = (dis - self.obs_delta)
+                    # relative_pos = obs.position() - agent.position()
+                    # # 计算相对位置的单位向量
+                    # relative_pos_unit = relative_pos / np.linalg.norm(relative_pos)
+                    # relative_pos = np.squeeze(relative_pos)
+                    
+                    # angle =self.calculate_angle_between_vectors(np.array([vx, vy]), relative_pos)
+
 
                 else:
-                    delta = 240
-                    x = 30
+                    delta = 100
+                    x = 20
+                    # angle = 0
 
                 d_dis = dis - last_obs_distance[obs_id]
 
@@ -559,6 +545,7 @@ class CustomEnv:
                         # print( f"d_dis : {d_dis}, x : {x}")
                     
                 reward += d_dis * delta+ -(1/dis) * x
+                # reward += d_dis * delta 
                 # reward +=  x * 50
             
         return  reward 
@@ -620,3 +607,33 @@ class CustomEnv:
         
         
         return distance, angle
+    
+    @staticmethod
+    def calculate_angle_between_vectors(v1, v2):
+        """
+        计算两个向量之间的夹角大小（以弧度为单位）。
+        
+        参数:
+        v1: 第一个向量 (vx1, vy1)
+        v2: 第二个向量 (vx2, vy2)
+        
+        返回:
+        float: 两个向量之间的夹角（以弧度为单位）
+        """
+        # 计算点积
+        dot_product = np.dot(v1, v2)
+        
+        # 计算两个向量的模长
+        norm_v1 = np.linalg.norm(v1)
+        norm_v2 = np.linalg.norm(v2)
+        
+        # 计算夹角的余弦值
+        cos_theta = dot_product / (norm_v1 * norm_v2)
+        
+        # 确保cos_theta在[-1, 1]范围内，避免数值误差
+        cos_theta = np.clip(cos_theta, -1.0, 1.0)
+        
+        # 计算夹角，以弧度为单位
+        angle = np.arccos(cos_theta)
+        
+        return angle
