@@ -33,7 +33,7 @@ for episode_i in range(RENDER_EPISODE_NUM):
         noisy_action = leader_action + noise
         noisy_action = np.clip(noisy_action, -1, 1)
 
-        # print("leader_action : ", leader_action)
+        print("leader_action : ", leader_action)
         last_distance = np.linalg.norm(np.array(env.leader_agent.pos) - np.array(env.leader_target_pos))
         last_obs_distance = {}
         for obs_id, obs in env.obstacles.items():

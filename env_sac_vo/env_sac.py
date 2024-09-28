@@ -18,7 +18,7 @@ LEADER_MAX_LINEAR_VEL = 2
 class CustomEnv:
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, width=100, height=100, num_obstacles=15, agent_radius=1, obs_radius = 2,safe_theta = 8,target_radius = 4,
+    def __init__(self, width=100, height=100, num_obstacles=15, agent_radius=1, obs_radius = 2.25,safe_theta = 8,target_radius = 4,
                  target_pos = np.array([50, 50]), delta = 0.1, memo_size=100000):
         super().__init__()
         
@@ -28,7 +28,7 @@ class CustomEnv:
         self.obs_radius = obs_radius
         self.target_radius = target_radius
         self.agent_radius = agent_radius
-        self.obs_delta =10
+        self.obs_delta =8
         self.fig = None
         self.ax = None
         
@@ -36,9 +36,14 @@ class CustomEnv:
         self.safe_theta = safe_theta
         self.rvo_inter = rvo_inter()
 
+        self.agent_trajectory = []
+        self.last_action = [0, 0]
+
+        
+
         # 生成circle_agent实例列表
         self.leader_agent = circle_agent(self, pos=[25, 25], vel=[0,0], orientation=0, memo_size=memo_size,
-                                         state_dim=11 + self.num_obstacles * 5,
+                                         state_dim=13 + self.num_obstacles * 5,
                                          action_dim=2,
                                          alpha=1e-4,
                                          beta=1e-4,
@@ -82,8 +87,8 @@ class CustomEnv:
         for i in range(len(self.fix_position), self.num_obstacles):
             self.obstacles[f"obstacle_{i}"] = obstacle(
                 radius=self.obs_radius,
-                pos_x=np.random.rand() * self.width * 0.7 + self.width * 0.15,
-                pos_y=np.random.rand() * self.height * 0.7 + self.height * 0.15,
+                pos_x=np.random.rand() * self.width * 0.6 + self.width * 0.20,
+                pos_y=np.random.rand() * self.height * 0.6 + self.height * 0.20,
                 safe_theta=self.safe_theta
             )
 
@@ -111,26 +116,26 @@ class CustomEnv:
                 for j in range(i):
                     obs2 = random_obstacles[j]
                     dis = np.linalg.norm(self.obstacles[key].position() - obs2.position())
-                    if dis < 2 * self.obs_radius + self.agent_radius + self.safe_theta:
+                    if dis < 2 * self.obs_radius + self.agent_radius + self.safe_theta*0.8:
                         is_position_valid = False
                         break
 
                 # 检查与固定障碍物的距离
                 for fixed_obs in fixed_obstacles:
                     dis_fixed = np.linalg.norm(self.obstacles[key].position() - fixed_obs.position())
-                    if dis_fixed < 2 * self.obs_radius + self.agent_radius + self.safe_theta:
+                    if dis_fixed < 2 * self.obs_radius + self.agent_radius + self.safe_theta*0.8:
                         is_position_valid = False
                         break
 
                 # 检查与目标位置的距离
                 dis2 = np.linalg.norm(np.array(self.leader_target_pos) - self.obstacles[key].position())
-                if dis2 < self.obs_radius + self.target_radius + self.agent_radius + self.safe_theta:
+                if dis2 < self.obs_radius + self.target_radius + self.agent_radius + self.safe_theta*0.8:
                     is_position_valid = False
 
                 # 如果位置无效，则重新生成随机位置
                 if not is_position_valid:
-                    self.obstacles[key].pos_x = np.random.rand() * self.width * 0.7 + self.width * 0.15
-                    self.obstacles[key].pos_y = np.random.rand() * self.height * 0.7 + self.height * 0.15
+                    self.obstacles[key].pos_x = np.random.rand() * self.width * 0.6 + self.width * 0.2
+                    self.obstacles[key].pos_y = np.random.rand() * self.height * 0.6 + self.height * 0.2
 
 
     def _check_obs_agent(self, agent):
@@ -171,22 +176,38 @@ class CustomEnv:
         
         
 
-        self.leader_target_pos = [self.width*0.1+np.random.rand()*self.width*0.8, self.height*0.1+np.random.rand()*self.height*0.8]
+        # self.leader_target_pos = [self.width*0.1+np.random.rand()*self.width*0.8, self.height*0.1+np.random.rand()*self.height*0.8]
+        
+        # self.leader_target_pos = [self.width*0.05+np.random.rand()*self.width*0.9, self.height*0.05+np.random.rand()*self.height*0.9]
+        
+        self.leader_target_pos = [84 + np.random.rand()*6, 84 + np.random.rand()*6]
+        
+        # self.leader_agent.set_position(self.width*0.10+np.random.rand()*self.width*0.8, self.height*0.10+np.random.rand()*self.height*0.8)
+        
+        # self.leader_agent.set_position(self.width*0.05+np.random.rand()*self.width*0.9, self.height*0.05+np.random.rand()*self.height*0.9)
+        
+        self.leader_agent.set_position(10 +np.random.rand() * 25, 10 + np.random.rand() * 25)
 
-        self.leader_agent.set_position(self.width*0.10+np.random.rand()*self.width*0.8, self.height*0.10+np.random.rand()*self.height*0.8)
         
         
 
         flag2 = self._check_obs_target(self.leader_target_pos)
         while flag2:
-            self.leader_target_pos = [self.width*0.1+np.random.rand()*self.width*0.8, self.height*0.1+np.random.rand()*self.height*0.8]
+            # self.leader_target_pos = [self.width*0.1+np.random.rand()*self.width*0.8, self.height*0.1+np.random.rand()*self.height*0.8]
+            # self.leader_target_pos = [self.width*0.05+np.random.rand()*self.width*0.9, self.height*0.05+np.random.rand()*self.height*0.9]
+            self.leader_target_pos = [84 + np.random.rand()*6, 84 + np.random.rand()*6]
+            
             flag2 = self._check_obs_target(self.leader_target_pos)
 
         self._check_obs()
         
         flag1 = self._check_obs_agent(self.leader_agent)
         while  np.linalg.norm(np.array(self.leader_target_pos) - np.array(self.leader_agent.pos)) < self.agent_radius + self.target_radius + self.safe_theta*3 or flag1:
-            self.leader_agent.set_position(self.width*0.10+np.random.rand()*self.width*0.8, self.height*0.10+np.random.rand()*self.height*0.8)
+            # self.leader_agent.set_position(self.width*0.10+np.random.rand()*self.width*0.8, self.height*0.10+np.random.rand()*self.height*0.8)
+            # self.leader_agent.set_position(self.width*0.05+np.random.rand()*self.width*0.9, self.height*0.05+np.random.rand()*self.height*0.9)
+            
+            self.leader_agent.set_position(10 +np.random.rand() * 25, 10 + np.random.rand() * 25)
+           
             flag1 = self._check_obs_agent(self.leader_agent)
 
         target_distance =  np.linalg.norm(np.array(self.leader_target_pos) - np.array(self.leader_agent.pos))
@@ -197,6 +218,7 @@ class CustomEnv:
         self.leader_agent.orientation = np.random.rand()*2*np.pi
         self.leader_agent.done = False
         self.leader_agent.target = False
+        self.last_action = [0, 0]
         observations = self.observe_leader(self.leader_agent, self.leader_target_pos, [0,0], target_distance, 0)
         target_info = self.leader_agent.target
 
@@ -269,7 +291,10 @@ class CustomEnv:
         target_pos_ = [self.leader_target_pos[0] / self.width, self.leader_target_pos[1] / self.height]
 
         side_pos = [agent.pos[0] / self.width, (self.width - agent.pos[0]) / self.width, agent.pos[1] / self.height, (self.height - agent.pos[1]) / self.height]
-        target_pos_2 = [(self.leader_target_pos[0]) - agent.pos[0] / self.width, (self.leader_target_pos[1] - agent.pos[1]) / self.height, _dis / (self.width * 1.414), (_angle - agent.orientation) / (2 * np.pi)]
+        target_pos_2 = [(self.leader_target_pos[0] - agent.pos[0]) / self.width, (self.leader_target_pos[1] - agent.pos[1]) / self.height, _dis / (self.width * 1.414), (_angle - agent.orientation) / (2 * np.pi)]
+
+        # last_action = [self.last_action[0], self.last_action[1]]
+        last_action = list(self.last_action[:2])  # 转换为列表
 
         
         obs_distance_angle = []
@@ -328,7 +353,8 @@ class CustomEnv:
             target_pos_2 +
             obs_pos_vel +
             # self_pos_ +
-            self_pos_2
+            self_pos_2 +
+            last_action
         )
         
 
@@ -375,6 +401,15 @@ class CustomEnv:
             color='purple'
         )
         self.ax.add_patch(arrow)
+
+        # 记录智能体当前的位置到轨迹
+        self.agent_trajectory.append(self.leader_agent.pos.copy())
+
+        # 绘制智能体的轨迹
+        if len(self.agent_trajectory) > 1:
+            traj_x, traj_y = zip(*self.agent_trajectory)
+            self.ax.plot(traj_x, traj_y, color='blue', linestyle='--', marker='o', markersize=1, label='Trajectory')
+
         
 
         # 绘制障碍物
@@ -403,13 +438,15 @@ class CustomEnv:
         vo_flag, reward1, min_dis = self._caculate_leader_vo_reward(agent, formation_target, action )
         reward2 = self._caculate_target_reward(agent_id, agent, formation_target, action, t, last_distance ,vo_flag)
         reward3 = self._caculate_obstacle_reward(agent_id, agent, last_obs_distance)
-        reward4 = self._caculate_velocity_reward(agent, action, vo_flag)
+        reward4 = self._caculate_velocity_reward(agent, action, vo_flag, self.last_action)
         reward5 = self._caculate_side_reward(agent)
         reward6 = self._caculate_time_reward(t)
         
         # reward = reward1[2] + reward2
         # if min_dis + self.obs_radius <= self.obs_delta :
         reward = reward2 + reward3 + reward4 + reward5
+
+        self.last_action = action
         # else:
         #     reward = reward2 + reward4 + reward5 
         # if reward1 != 0:
@@ -480,10 +517,12 @@ class CustomEnv:
             # print((1- (dis_ / 100))*2)
             if vo_flag:
                 # return 0
-                return reward *100
+                # return reward *100
+                return reward *150
 
             else:
-                return reward *500
+                # return reward *500
+                return reward *700
         # if np.isnan(reward) or np.isinf(reward):
         #     print(f"NaN or Inf detected in reward calculation! reward: {reward}, dis: {dis}, action: {action}")
         #     reward = -100  # 或其他合理的默认值
@@ -498,7 +537,7 @@ class CustomEnv:
         
         for obs_id, obs in self.obstacles.items():
             dis, angle = CustomEnv.calculate_relative_distance_and_angle(agent.pos, [obs.pos_x, obs.pos_y])
-            if dis <= self.obs_delta and abs(angle - agent.orientation)<=np.pi/2:
+            if dis <= self.obs_delta and abs(angle - agent.orientation)<=(np.pi/2)*1.2:
                 vx = agent.vel * cos(agent.orientation)
                 vy = agent.vel * sin(agent.orientation)
                 robot_state = [agent.pos[0], agent.pos[1], vx, vy, self.agent_radius]
@@ -512,8 +551,8 @@ class CustomEnv:
                                                                                                                                                         obs_line_list=obs_line_list,
                                                                                                                                                         action=action)
                 if vo_flag:
-                    delta = 500
-                    x = 100
+                    delta = 800
+                    x = 60
                     # x = 0
                     # x = (dis - self.obs_delta)
                     # relative_pos = obs.position() - agent.position()
@@ -526,7 +565,8 @@ class CustomEnv:
 
                 else:
                     delta = 100
-                    x = 20
+                    # x = 20
+                    x = 0
                     # angle = 0
 
                 d_dis = dis - last_obs_distance[obs_id]
@@ -550,11 +590,15 @@ class CustomEnv:
             
         return  reward 
     
-    def _caculate_velocity_reward(self, agent, action, vo_flag):
+    def _caculate_velocity_reward(self, agent, action, vo_flag, last_action):
         if vo_flag:
-            return ((action[0] + 1) + abs(action[1])/2) *5
+            # return ((action[0] + 1) + abs(action[1])/2) *5
+            # return (action[0] + 1) *5 - abs(action[1]) *2.5  - abs(action[0] - last_action[0])*5
+            return (action[0] + 1) *5 - abs(action[1]) *5  - abs(action[1] - last_action[1]) *15
         else:
-            return ((action[0] + 1) - abs(action[1])/2 ) *5
+            # return ((action[0] + 1) ) *5 + (abs(action[1])/2)*3
+            # return (action[0] + 1) *5 - abs(action[1]) *2.5  - abs(action[0] - last_action[0])*5
+            return ((action[0] + 1) ) *5 - abs(action[1]) *5 - abs(action[1] - last_action[1])*15
         
 
     def _caculate_side_reward(self, agent):
@@ -574,7 +618,7 @@ class CustomEnv:
 
             reward += re
 
-        return reward *2
+        return reward *10  #3
 
     def _caculate_time_reward(self, t):
 

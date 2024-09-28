@@ -150,3 +150,72 @@ def _caculate_target_reward(self, check_agent_id, check_agent, formation_target,
             reward += re
 
         return reward *2
+
+
+
+
+
+
+        def _caculate_obstacle_reward(self, agent_id, agent, last_obs_distance):
+        if agent.done and not agent.target:
+                    return -500
+        
+        reward = 0
+        
+        for obs_id, obs in self.obstacles.items():
+            dis, angle = CustomEnv.calculate_relative_distance_and_angle(agent.pos, [obs.pos_x, obs.pos_y])
+            if dis <= self.obs_delta and abs(angle - agent.orientation)<=np.pi/2:
+                vx = agent.vel * cos(agent.orientation)
+                vy = agent.vel * sin(agent.orientation)
+                robot_state = [agent.pos[0], agent.pos[1], vx, vy, self.agent_radius]
+                nei_state_list = []
+                obs_cir_list = [ [obs.pos_x, obs.pos_y, obs.xy_vel[0], obs.xy_vel[1], self.obs_radius * 1.2]]#放大
+                obs_line_list = []
+                action = [vx, vy]
+                vo_flag, min_exp_time, min_dis = self.rvo_inter.config_vo_reward(robot_state=robot_state,
+                                                                                                                                                        nei_state_list=nei_state_list,
+                                                                                                                                                        obs_cir_list=obs_cir_list,
+                                                                                                                                                        obs_line_list=obs_line_list,
+                                                                                                                                                        action=action)
+                if vo_flag:
+                    delta = 750
+                    x = 60
+                    # x = 0
+                    # x = (dis - self.obs_delta)
+                    relative_pos = obs.position() - agent.position()
+                    # 计算相对位置的单位向量
+                    relative_pos_unit = relative_pos / np.linalg.norm(relative_pos)
+                    
+                    angle =self.calculate_angle_between_vectors([vx, vy], relative_pos)
+
+                    
+
+                    
+
+
+
+                else:
+                    delta = 240
+                    x = 30
+                    angle = 0
+
+                d_dis = dis - last_obs_distance[obs_id]
+
+                # if dis <= self.obs_delta :
+                #     x = -(1/dis)
+                # else:
+                #     x = 0
+
+
+                # if dis < 5:
+                # x = -(1/dis)
+                # else:
+                #     x = 0
+                
+                        # print( f"d_dis : {d_dis}, x : {x}")
+                    
+                # reward += d_dis * delta+ -(1/dis) * x
+                reward += d_dis * delta +abs(angle)*100
+                # reward +=  x * 50
+            
+        return  reward 

@@ -196,6 +196,7 @@ class follower_uav():
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.done = False
         self.target = False
+        self.observation = np.array([])
 
         self.sac_network = SAC(state_dim=self.state_dim, hidden_dim=self.hidden_dim, action_dim=self.action_dim,
                                actor_lr=self.alpha, critic_lr=self.beta, alpha_lr=self.alpha_lr,
@@ -206,6 +207,10 @@ class follower_uav():
     def set_position(self, x, y):
         self.pos[0] = x
         self.pos[1] = y
+
+    def set_vel(self, x, y):
+        self.vel[0] = x
+        self.vel[1] = y
     
     def position(self):
         return np.array([self.pos])

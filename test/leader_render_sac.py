@@ -11,16 +11,21 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from env_sac_vo.env_sac import CustomEnv
 from env_sac_vo.circle_agent_sac import circle_agent, ReplayBuffer
 
+
 RENDER_EPISODE_NUM = 5
-RENDER_NUM_STEP = 500
+RENDER_NUM_STEP = 1000
 
 scenario = "leader_sac_vo"
 current_path = os.path.dirname(os.path.realpath(__file__))
 agent_path = current_path + "/leader_model/better/" 
+# agent_path = current_path + "/leader_model/" 
 
-env = CustomEnv(delta=0.1)
-env.leader_agent.sac_network.load_model(agent_path, scenario)
+# env = CustomEnv(delta=0.1)
+# env.leader_agent.sac_network.load_model(agent_path, scenario)
 for episode_i in range(RENDER_EPISODE_NUM):
+    env = CustomEnv(delta=0.1)
+    env.leader_agent.sac_network.load_model(agent_path, scenario)
+
     state, done = env.reset()
     target_distance = np.linalg.norm(np.array(env.leader_agent.pos)- np.array(env.leader_target_pos))
     print("rendering episode ", episode_i," ==========================")
