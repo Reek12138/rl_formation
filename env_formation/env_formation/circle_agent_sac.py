@@ -92,6 +92,11 @@ class PolicyNetContinuous(nn.Module):
         self.fc1=nn.Linear(state_dim,hidden_dim)
         self.fc_mu=nn.Linear(hidden_dim,action_dim)
         self.fc_std=nn.Linear(hidden_dim,action_dim)
+
+        # 使用 Xavier 初始化权重
+        nn.init.xavier_uniform_(self.fc1.weight)
+        nn.init.xavier_uniform_(self.fc_mu.weight)
+        nn.init.xavier_uniform_(self.fc_std.weight)
         
         
     def forward(self,x):
@@ -135,6 +140,11 @@ class QValueNetContinuous(nn.Module):
         self.fc1=nn.Linear(state_dim+action_dim,hidden_dim)
         self.fc2=nn.Linear(hidden_dim,hidden_dim)
         self.fc_out=nn.Linear(hidden_dim,1)
+
+        # 使用 He 初始化权重
+        nn.init.kaiming_uniform_(self.fc1.weight, nonlinearity='relu')
+        nn.init.kaiming_uniform_(self.fc2.weight, nonlinearity='relu')
+        nn.init.kaiming_uniform_(self.fc_out.weight)  # 输出层通常不需要特定激活函数的考虑
         
     def forward(self, x, a):
         cat = torch.cat([x, a], dim=1)

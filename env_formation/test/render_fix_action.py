@@ -42,17 +42,25 @@ for episode_i in range(RENDER_EPISODE_NUM):
         last_obs_distance = {}
         for obs_id, obs in env.obstacles.items():
             last_obs_distance[obs_id] = np.linalg.norm(np.array(env.leader_agent.pos) - np.array([obs.pos_x, obs.pos_y]))
+        
+        last_follower_obs_distances = []
+        for i in range(env.follower_uav_num):
+            last_follower_obs_distance = {}
+            for obs_id, obs in env.obstacles.items():
+                last_follower_obs_distance[obs_id] = np.linalg.norm(np.array(env.follower_uavs[f"follower_{i}"].pos) - np.array([obs.pos_x, obs.pos_y]))
+            last_follower_obs_distances.append(last_follower_obs_distance)
 
         follower_actions = []
         for i in range (env.follower_uav_num):
-            follower_action_i = [1.414, 1.414]
+            follower_action_i = [-0.707, -0.707]
             follower_actions.extend(follower_action_i)
 
         leader_next_state, reward, done, target, \
             next_follower_observations, follower_reward, follower_done = env.step(leader_action = leader_noisy_action,
                                                                                                 follower_actions = follower_actions,
                                                                                                 last_distance=leader_target_distance,
-                                                                                                last_obs_distance=last_obs_distance)
+                                                                                                last_obs_distance=last_obs_distance,
+                                                                                                last_follower_obs_distance=last_follower_obs_distances)
         if env.leader_agent.done and not env.leader_agent.target:
             print(f"xxxxxxxxxxxxxxxxxx  COLLISION  xxxxxxxxxxxxxxxxxxx step{step_i} reward : {reward}")
             break

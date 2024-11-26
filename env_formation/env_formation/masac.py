@@ -42,16 +42,23 @@ class PolicyNetwork(nn.Module):
         self.fc_mu = nn.Linear(hidden_dim, action_dim)
         self.fc_std = nn.Linear(hidden_dim, action_dim)
 
+         # 使用 Xavier 初始化权重
+        nn.init.xavier_uniform_(self.fc1.weight)
+        nn.init.xavier_uniform_(self.fc_mu.weight)
+        nn.init.xavier_uniform_(self.fc_std.weight)
+
     def forward(self, x):
         x = F.relu(self.fc1(x))
         mu = self.fc_mu(x)
-        std = F.softplus(self.fc_std(x)) + 1e-6
+        # std = F.softplus(self.fc_std(x)) + 1e-6
+        std = F.softplus(self.fc_std(x))
         dist = Normal(mu, std)
         normal_sample = dist.rsample()
         log_prob = dist.log_prob(normal_sample)
         action = torch.tanh(normal_sample)
 
-        log_prob = log_prob - torch.log(1-torch.tanh(action).pow(2) + 1e-7)
+        # log_prob = log_prob - torch.log(1-torch.tanh(action).pow(2) + 1e-7)
+        log_prob = log_prob - torch.log(torch.clamp(1 - torch.tanh(action).pow(2), min=1e-6))
         log_prob = log_prob.sum(dim = -1, keepdim=True)
 
         return action, log_prob
@@ -59,7 +66,7 @@ class PolicyNetwork(nn.Module):
     def save_checkpoint(self, checkpoint_file):
         torch.save(self.state_dict(), checkpoint_file)
 
-    def load_checkoint(self, checkpont_file):
+    def load_checkpoint(self, checkpont_file):
         self.load_state_dict(torch.load(checkpont_file))
 
 
@@ -70,6 +77,11 @@ class QvalueNet(nn.Module):
         self.fc1 = nn.Linear(multi_state_dim + multi_action_dim, multi_hidden_dim)
         self.fc2 = nn.Linear(multi_hidden_dim, multi_hidden_dim)
         self.fc_out = nn.Linear(multi_hidden_dim, 1)
+
+        # 使用 He 初始化权重
+        nn.init.kaiming_uniform_(self.fc1.weight, nonlinearity='relu')
+        nn.init.kaiming_uniform_(self.fc2.weight, nonlinearity='relu')
+        nn.init.kaiming_uniform_(self.fc_out.weight)  # 输出层通常不需要特定激活函数的考虑
     
     def forward(self, mx, ma):
         mx = mx.view(mx.size(0), -1)  # 展平为 [batch_size, state_dim * agent_num]
@@ -106,9 +118,11 @@ class MASAC:
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=actor_lr)
         self.critic_1_optimizer = torch.optim.Adam(self.critic_1.parameters(), lr=critic_lr)
         self.critic_2_optimizer = torch.optim.Adam(self.critic_2.parameters(), lr=critic_lr)
-        self.log_alpha = torch.tensor(np.log(0.01), dtype=torch.float)
-        self.log_alpha.requires_grad=True
+        # self.log_alpha = torch.tensor(np.log(0.01), dtype=torch.float)
+        # self.log_alpha.requires_grad=True
+        self.log_alpha = torch.tensor(np.log(0.01), dtype=torch.float, requires_grad=True, device=device)
         self.log_alpha_optimizer = torch.optim.Adam([self.log_alpha], lr=alpha_lr)
+
         self.target_entropy  =target_entropy
         self.gamma = gamma
         self.tau = tau
@@ -176,7 +190,7 @@ class MASAC:
         td_target = self.calc_target(rewards=rewards, 
                                      next_states=multi_next_states, 
                                      multi_next_states=multi_next_states, 
-                                     dones=dones)#TODO
+                                     dones=dones)
 
         critic_1_loss = torch.mean(F.mse_loss(self.critic_1(multi_state, actions), td_target.detach()))
         critic_2_loss = torch.mean(F.mse_loss(self.critic_2(multi_state, actions), td_target.detach()))
@@ -226,10 +240,15 @@ class MASAC:
         self.critic_2.save_checkpoint(os.path.join(base_path, f"uav_critic_2_{scenario}.pth"))
         self.target_critic_1.save_checkpoint(os.path.join(base_path, f"uav_target_critic_1_{scenario}.pth"))
         self.target_critic_2.save_checkpoint(os.path.join(base_path, f"uav_target_critic_2_{scenario}.pth"))
+        torch.save(self.log_alpha, os.path.join(base_path, f"log_alpha_{scenario}.pth"))
 
     def load_model(self, base_path, scenario):
-        self.actor.load_checkoint(os.path.join(base_path, f"uav_actor_{scenario}.pth"))
+        # print("Loading model from:", os.path.join(base_path, f"uav_target_critic_1_{scenario}.pth"))
+
+        self.actor.load_checkpoint(os.path.join(base_path, f"uav_actor_{scenario}.pth"))
         self.critic_1.load_checkpoint(os.path.join(base_path, f"uav_critic_1_{scenario}.pth"))
         self.critic_2.load_checkpoint(os.path.join(base_path, f"uav_critic_2_{scenario}.pth"))
         self.target_critic_1.load_checkpoint(os.path.join(base_path, f"uav_target_critic_1_{scenario}.pth"))
         self.target_critic_2.load_checkpoint(os.path.join(base_path, f"uav_target_critic_2_{scenario}.pth"))
+        self.log_alpha = torch.load(os.path.join(base_path, f"log_alpha_{scenario}.pth")).to(self.device)
+        self.log_alpha.requires_grad = True  # 确保重新加载后继续优化

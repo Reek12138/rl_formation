@@ -9,6 +9,8 @@ from numpy import inf
 import torch.nn.functional as F
 from numpy import sqrt
 from math import sin, cos, tan, pi, sqrt, log
+np.set_printoptions(precision=5, suppress=True)
+
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -118,13 +120,13 @@ for episode_i in range(NUM_EPISODE):
             # print(env.follower_uavs[f"follower_{i}"].observation.shape)
             follower_action = env.MASAC.take_action(env.follower_uavs[f"follower_{i}"].observation)
             follower_observations. extend(env.follower_uavs[f"follower_{i}"].observation)
-            noisy_follower_action = follower_action + np.random.normal(0, 0.2, size=follower_action.shape)
+            noisy_follower_action = follower_action + np.random.normal(0, 0.1, size=follower_action.shape)
             noisy_follower_action = np.clip(noisy_follower_action, -1, 1)
             follower_actions.extend(noisy_follower_action)
         
-        
-
-        
+        # print("follower_actions: ", follower_actions)
+        # for i in range (env.follower_uav_num):
+        #     print(f"uav_{i} follower_action: ", follower_actions[2*i: 2*i+2])
         leader_next_state, reward, done, target, \
             next_follower_observations, follower_reward, follower_done = env.step(leader_action = noisy_action,
                                                                                                 follower_actions = follower_actions,
@@ -136,10 +138,15 @@ for episode_i in range(NUM_EPISODE):
         # follower_S = np.concatenate(follower_observations, axis=0)
         # follower_NS = np.concatenate(next_follower_observations, axis=0)
         # follower_R = sum(follower_reward)/ env.follower_uav_num
+        # print("follower_obs:", follower_observations)
+        # print("follower_next_obs:", next_follower_observations)
         follower_A = np.array(follower_actions)
         follower_S = np.array(follower_observations)
         follower_NS = np.array(next_follower_observations)
         follower_R = sum(follower_reward)/ env.follower_uav_num
+        # print("np follower_obs:", follower_S)
+        # print("np follower_next_obs:", follower_NS)
+        # print("follower reward: ", follower_reward)
 
 
         if reward > leader_highest_step_reward:
@@ -164,6 +171,8 @@ for episode_i in range(NUM_EPISODE):
         env.leader_agent.replay_buffer.add(state=leader_state, action=leader_action, reward=reward, next_state=leader_next_state,done=done)
         # 跟随者经验回放
         env.MASAC.replay_buffer.add(state=follower_S, action=follower_A, reward=follower_R, next_state=follower_NS, done=follower_done)
+        # print("shape of follower_s:", follower_S.shape)
+        # print("shape of follower_ns:", follower_NS.shape)
 
         leader_state = leader_next_state
         
@@ -182,6 +191,7 @@ for episode_i in range(NUM_EPISODE):
                 env.leader_agent.sac_network.update(transition_dict=transition_dict)
 
                 # 跟随者的网络更新
+                # if (total_step + 1) % (TARGET_UPDATE_INTERVAL*2) == 0:
                 fs, fa, fr, fns, fd = env.MASAC.replay_buffer.sample(batch_size=BATCH_SIZE)
                 f_transition_dict = {'states' : fs,
                                     'actions' : fa,
@@ -261,6 +271,7 @@ for episode_i in range(NUM_EPISODE):
         num_collision_side = 0
         num_collision_obstacle = 0
         num_follower_collision = 0
+        lowest_num_follower_collision = RENDER_NUM_EPISODE
         print("======================验证中=========================")
 
         for test_episode_i in range (RENDER_NUM_EPISODE):
@@ -354,16 +365,21 @@ for episode_i in range(NUM_EPISODE):
             if not os.path.exists(better_path):
                 os.makedirs(better_path)
             env.leader_agent.sac_network.save_model(better_path, scenario)
-
-            if not os.path.exists(follower_path):
-                os.makedirs(follower_path)
-            env.MASAC.save_model(follower_path, scenario)
-
-            print("--------------------------更好的参数-----------------")
-            if num_reach_goal == RENDER_NUM_EPISODE:
-                BREAK_FLAG = True
-
             highest_num_reach_goal = num_reach_goal
+
+            print("--------------------领航者更好的参数-----------------")
+
+        if num_follower_collision <= lowest_num_follower_collision:
+            if not os.path.exists(follower_better_path):
+                os.makedirs(follower_better_path)
+            env.MASAC.save_model(follower_better_path, scenario)
+            lowest_num_follower_collision = num_follower_collision
+            print("--------------------跟随者更好的参数-----------------")
+
+        if num_reach_goal == RENDER_NUM_EPISODE:
+            BREAK_FLAG = True
+
+            
 
         if  episode_i > NUM_EPISODE*(2/3):
             env.leader_agent.sac_network.load_model(better_path, scenario)
