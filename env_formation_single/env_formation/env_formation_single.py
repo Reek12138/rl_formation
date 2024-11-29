@@ -69,7 +69,7 @@ class CustomEnv:
         # print(self.leader_agent.pos)
         # for i in range (follower_uav_num):
         #     print(self.follower_uavs[f"follower_{i}"].pos)
-        self.SAC = SAC(state_dim = (4+2+3*5+2+5*(self.follower_uav_num-1) + 2 ),
+        self.SAC = SAC(state_dim = (4+2+3*5+2+5*(self.follower_uav_num-1) + 2 +2 ),
                         #    state_dim = (4+4+5*self.num_obstacles+2+5*(self.follower_uav_num-1))
                                                             hidden_dim = 512,
                                                             action_dim=2,
@@ -435,6 +435,11 @@ class CustomEnv:
                 round(self.follower_uavs[f"follower_{i}"].vel[1] / 2.5, 5),
             ]
 
+            self_last_pos_2 = [
+                round(self.last_follower_action[i][0], 5),
+                round(self.last_follower_action[i][1], 5)
+            ]
+
             # 领导者速度
             leader_vel = [
                 round(self.leader_agent.vel * cos(self.leader_agent.orientation) * 0.5, 5),
@@ -504,6 +509,7 @@ class CustomEnv:
                 self_pos_2+
                 follower_pos_ + 
                 leader_vel 
+                + self_last_pos_2
                 # +leader_pos
             ])
 
@@ -856,7 +862,8 @@ class CustomEnv:
                                                                                                                                                         action=action)
                 if vo_flag and dis <= self.obs_delta:
                     # delta = -10 * (self.obs_delta*0.5/ (min_dis + 0.1))
-                    delta = max(-900/(dis*dis), -120)
+                    # delta = max(-900/(dis*dis), -120)
+                    delta = max(-1200/(dis*dis), -150)
                     x = 0
                     # print(f"uav_{uav_id}_vo_flag")
                 else:
@@ -964,7 +971,7 @@ class CustomEnv:
         reward = 0
         reward += -abs(action[0] - self.last_follower_action[uav_id][0]) - abs(action[1] - self.last_follower_action[uav_id][1])
 
-        return round(reward *5, 5)
+        return round(reward *10, 5)
         
 
     def _check_obs_collision(self,current_agent,new_pos):

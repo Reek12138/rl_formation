@@ -57,7 +57,7 @@ last_episode_follower_reward = -inf
 
 env.leader_agent.replay_buffer.clear()
 env.SAC.replay_buffer.clear()
-env.leader_agent.sac_network.load_model(better_path, scenario)
+env.leader_agent.sac_network.load_model(better_path, scenario2)
 env.SAC.load_model(follower_better_path, scenario)
 
 for episode_i in range(NUM_EPISODE):
